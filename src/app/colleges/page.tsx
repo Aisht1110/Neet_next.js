@@ -14,7 +14,10 @@ import {
   Heart,
   Compass,
   ArrowRight,
-  Info
+  Info,
+  ChevronDown,
+  ChevronUp,
+  Lock
 } from 'lucide-react';
 import { getCollegeData } from '@/lib/engine/collegeData';
 import { CollegeIndexEntry, RoundInfo, MasterCollege } from '@/lib/engine/types';
@@ -26,7 +29,10 @@ import {
   getInternalPgQuota 
 } from '@/lib/engine/collegeIntelligence';
 import { useUserData } from '@/lib/store/useUserData';
+import { useAuth } from '@/lib/firebase/AuthContext';
 import { CutoffModal, CutoffModalCollegeData } from '@/components/predictor/CutoffModal';
+import { CardCutoffInline } from '@/components/predictor/CardCutoffInline';
+import { UpgradeModal } from '@/components/common/UpgradeModal';
 import { BrandIcon } from '@/components/common/BrandIcon';
 
 export default function CollegesPage() {
@@ -36,9 +42,12 @@ export default function CollegesPage() {
   const [selectedType, setSelectedType] = useState<string>('');
   const [selectedCourse, setSelectedCourse] = useState<string>('MBBS');
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [expandedCollegeKey, setExpandedCollegeKey] = useState<string | null>(null);
   const [activeCollegeModal, setActiveCollegeModal] = useState<CutoffModalCollegeData | null>(null);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState<boolean>(false);
   const PER_PAGE = 24;
 
+  const { tierCategory } = useAuth();
   const { isInWishlist, toggleWishlist } = useUserData();
 
   useEffect(() => {
@@ -250,7 +259,7 @@ export default function CollegesPage() {
         {/* Search & Filter Bar */}
         <div className="glass-panel p-4 sm:p-5 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="relative w-full md:w-96">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-white/40" />
             <input
               type="text"
               placeholder="Search college name, state, or city…"
@@ -315,9 +324,9 @@ export default function CollegesPage() {
         {/* College Grid */}
         {index ? (
           <div>
-            <div className="text-xs text-white/60 mb-5 px-1 font-semibold flex items-center justify-between">
+            <div className="text-xs text-slate-600 dark:text-white/60 mb-5 px-1 font-semibold flex items-center justify-between">
               <span>Showing {paged.length} of {filtered.length} matching medical colleges</span>
-              {filtered.length > 0 && <span className="mono-font text-teal-400">Page {currentPage} of {totalPages}</span>}
+              {filtered.length > 0 && <span className="mono-font text-teal-600 dark:text-teal-400">Page {currentPage} of {totalPages}</span>}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -327,38 +336,48 @@ export default function CollegesPage() {
                 const fee = getEstimatedFee(c.name, c.quota);
                 const pg = getInternalPgQuota(c.name);
                 const isWishlisted = isInWishlist(c.key);
+                const isExpanded = expandedCollegeKey === c.key;
+
+                const toggleCardExpand = () => {
+                  setExpandedCollegeKey(prev => prev === c.key ? null : c.key);
+                };
 
                 return (
                   <div 
                     key={c.id} 
-                    onClick={() => handleOpenCollegeDetails(c)}
+                    onClick={toggleCardExpand}
                     role="button"
                     tabIndex={0}
+                    aria-expanded={isExpanded}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        handleOpenCollegeDetails(c);
+                        toggleCardExpand();
                       }
                     }}
-                    className="glass-panel p-5 hover:border-teal-400/50 hover:shadow-[0_0_24px_rgba(0,229,170,0.12)] transition-all flex flex-col justify-between group cursor-pointer"
+                    className={`glass-panel p-5 hover:border-teal-400/50 hover:shadow-[0_0_24px_rgba(0,229,170,0.12)] transition-all flex flex-col justify-between group cursor-pointer ${
+                      isExpanded 
+                        ? 'md:col-span-2 lg:col-span-3 ring-2 ring-teal-500/50 dark:ring-teal-400/50 shadow-[0_4px_32px_rgba(0,229,170,0.16)]' 
+                        : ''
+                    }`}
                   >
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className={`badge ${c.type.cls}`}>{c.type.label}</span>
                           {c.masterInfo?.management && (
-                            <span className="badge bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <span className="badge bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
                               {c.masterInfo.management}
                             </span>
                           )}
-                          <span className="badge bg-teal-400/10 text-teal-300 border border-teal-400/20">{c.course}</span>
+                          <span className="badge bg-teal-500/10 text-teal-800 dark:text-teal-300 border border-teal-500/20">{c.course}</span>
                           {c.masterInfo?.established_year && (
-                            <span className="badge bg-white/5 text-white/50 border border-white/10 font-mono text-[10px]">
+                            <span className="badge bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 border border-slate-200 dark:border-white/10 font-mono text-[10px]">
                               Est. {c.masterInfo.established_year}
                             </span>
                           )}
                           {pg && (
-                            <span className="badge bg-purple-400/15 text-purple-300 border border-purple-400/30 text-[10px]">
+                            <span className="badge bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 text-[10px]">
                               {pg.univ.includes('DU') ? '50% DU PG' : pg.univ.includes('IPU') ? '50% IPU PG' : 'Internal PG'}
                             </span>
                           )}
@@ -368,6 +387,10 @@ export default function CollegesPage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!tierCategory.canAccessWishlist) {
+                              setUpgradeModalOpen(true);
+                              return;
+                            }
                             toggleWishlist({
                               key: c.key,
                               name: c.name,
@@ -382,53 +405,63 @@ export default function CollegesPage() {
                             });
                           }}
                           className={`h-8 w-8 flex items-center justify-center rounded-xl border transition-all cursor-pointer ${
-                            isWishlisted ? 'border-rose-400/50 bg-rose-400/20 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)]' : 'border-white/10 bg-white/5 text-white/40 hover:text-white hover:bg-white/10'
+                            isWishlisted && tierCategory.canAccessWishlist 
+                              ? 'border-rose-400/50 bg-rose-500/20 text-rose-600 dark:text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)]' 
+                              : 'border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-white/40 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
                           }`}
-                          title={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
+                          title={
+                            !tierCategory.canAccessWishlist
+                              ? 'Unlock College Wishlist (Season Pass VIP)'
+                              : (isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist')
+                          }
                         >
-                          <Heart className={`h-4 w-4 ${isWishlisted ? 'fill-rose-400 text-rose-400' : ''}`} />
+                          {!tierCategory.canAccessWishlist ? (
+                            <Lock className="h-3.5 w-3.5 text-amber-500" />
+                          ) : (
+                            <Heart className={`h-4 w-4 ${isWishlisted ? 'fill-rose-500 text-rose-500 dark:fill-rose-400 dark:text-rose-400' : ''}`} />
+                          )}
                         </button>
                       </div>
 
-                      <h3 className="font-bold text-white text-base leading-snug line-clamp-2 mb-1 group-hover:text-teal-300 transition-colors">
+                      <h3 className="font-bold text-slate-950 dark:text-white text-base leading-snug line-clamp-2 mb-1 group-hover:text-teal-600 dark:group-hover:text-teal-300 transition-colors">
                         {c.name}
                       </h3>
-                      <p className="text-xs text-white/50 flex items-center gap-1.5 mb-3.5">
-                        <MapPin className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                      <p className="text-xs text-slate-500 dark:text-white/50 flex items-center gap-1.5 mb-3.5">
+                        <MapPin className="h-3.5 w-3.5 text-teal-500 dark:text-teal-400 shrink-0" />
                         <span>{c.state || 'All India'}</span>
                       </p>
 
                       {/* Quick Metrics: Fee, Seats, Bond, Stipend */}
-                      <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-white/[0.02] border border-white/5 text-[11px] mb-4">
+                      <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-slate-100 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 text-[11px] mb-4">
                         <div>
-                          <span className="text-white/40 block text-[9px] uppercase font-bold">Annual Fee</span>
-                          <span className="font-bold text-emerald-400 mono-font truncate block">{fee.annualFee}</span>
+                          <span className="text-slate-500 dark:text-white/40 block text-[9px] uppercase font-bold">Annual Fee</span>
+                          <span className="font-bold text-emerald-700 dark:text-emerald-400 mono-font truncate block">{fee.annualFee}</span>
                         </div>
                         <div>
-                          <span className="text-white/40 block text-[9px] uppercase font-bold">MBBS Seats</span>
-                          <span className="font-bold text-cyan-300 mono-font truncate block">
+                          <span className="text-slate-500 dark:text-white/40 block text-[9px] uppercase font-bold">MBBS Seats</span>
+                          <span className="font-bold text-sky-700 dark:text-cyan-300 mono-font truncate block">
                             {c.masterInfo?.mbbs_seats ? `${c.masterInfo.mbbs_seats} Seats` : '150 - 250'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-white/40 block text-[9px] uppercase font-bold">Rural Bond</span>
-                          <span className="font-bold text-amber-300 block truncate">
+                          <span className="text-slate-500 dark:text-white/40 block text-[9px] uppercase font-bold">Rural Bond</span>
+                          <span className="font-bold text-amber-700 dark:text-amber-300 block truncate">
                             {bond ? (bond.years === 0 ? '0 Yrs' : `${bond.years} Yrs`) : 'No Bond'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-white/40 block text-[9px] uppercase font-bold">Stipend</span>
-                          <span className="font-bold text-teal-300 mono-font block truncate">
+                          <span className="text-slate-500 dark:text-white/40 block text-[9px] uppercase font-bold">Stipend</span>
+                          <span className="font-bold text-teal-700 dark:text-teal-300 mono-font block truncate">
                             {stipend ? stipend.display : 'State'}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2">
+                    <div className="pt-3 border-t border-slate-200 dark:border-white/5 flex items-center justify-between gap-2">
                       <div className="text-xs min-w-0">
-                        <span className="text-white/40 block text-[10px] uppercase font-bold">Best Closing Rank</span>
-                        <span className="font-black text-teal-300 mono-font text-sm truncate block">
+                        <span className="text-slate-500 dark:text-white/40 block text-[10px] uppercase font-bold">Best Closing Rank</span>
+                        <span className="font-black text-teal-700 dark:text-teal-300 mono-font text-sm truncate block">
                           {c.bestRank > 0 ? `~${c.bestRank.toLocaleString()} AIR` : 'Cutoff Varies'}
                         </span>
                       </div>
@@ -438,13 +471,27 @@ export default function CollegesPage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenCollegeDetails(c);
+                            toggleCardExpand();
                           }}
-                          className="btn-secondary py-1.5 px-3 text-xs font-semibold flex items-center gap-1.5 hover:border-teal-400/50 hover:bg-teal-400/10 text-teal-300 cursor-pointer"
-                          title="View Round-by-Round Breakdown"
+                          className={`btn-secondary py-1.5 px-3 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isExpanded 
+                              ? 'border-teal-500 bg-teal-500 text-slate-950 font-bold dark:bg-teal-400 dark:text-slate-950 shadow-sm' 
+                              : 'hover:border-teal-500/50 hover:bg-teal-500/10 text-teal-800 dark:text-teal-300'
+                          }`}
+                          title={isExpanded ? 'Collapse Cutoffs Breakdown' : 'Expand Cutoffs Breakdown in Place'}
                         >
-                          <Info className="h-3.5 w-3.5" />
-                          <span>Cutoffs</span>
+                          {isExpanded ? (
+                            <>
+                              <ChevronUp className="h-3.5 w-3.5" />
+                              <span>Close</span>
+                            </>
+                          ) : (
+                            <>
+                              <Info className="h-3.5 w-3.5" />
+                              <span>Cutoffs</span>
+                              <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                            </>
+                          )}
                         </button>
 
                         <Link
@@ -457,6 +504,38 @@ export default function CollegesPage() {
                         </Link>
                       </div>
                     </div>
+
+                    {/* ── EXPANDED IN-PLACE CARD BREAKDOWN ── */}
+                    {isExpanded && (
+                      <div className="w-full mt-3.5">
+                        <CardCutoffInline
+                          college={{
+                            key: c.key,
+                            name: c.name,
+                            institute: c.institute,
+                            state: c.state,
+                            course: c.course,
+                            quota: c.quota,
+                            availableQuotas: c.availableQuotas,
+                            category: c.category,
+                            availableCategories: c.availableCategories,
+                            closingRank: c.bestRank,
+                            collegeType: c.type,
+                            masterInfo: c.masterInfo,
+                            rounds: c.rounds,
+                            allHistoricalRounds: c.rounds,
+                            projected: {
+                              basis: `Official MCC Counselling allotment record across 2024 & 2025. Best historical closing rank: ~${c.bestRank > 0 ? c.bestRank.toLocaleString() : 'N/A'} AIR across all counselling rounds.`,
+                              best2024: c.rounds.filter(r => String(r.year) === '2024').map(r => r.closing_rank).filter(r => r > 0).sort((a,b) => a-b)[0] || null,
+                              best2025: c.rounds.filter(r => String(r.year) === '2025').map(r => r.closing_rank).filter(r => r > 0).sort((a,b) => a-b)[0] || null,
+                              rank: c.bestRank,
+                            }
+                          }}
+                          onCollapse={() => setExpandedCollegeKey(null)}
+                          onOpenFullModal={() => handleOpenCollegeDetails(c)}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -472,7 +551,7 @@ export default function CollegesPage() {
                 >
                   Previous
                 </button>
-                <span className="text-xs text-white/60 px-2 mono-font">
+                <span className="text-xs text-slate-600 dark:text-white/60 px-2 mono-font">
                   Page {currentPage} of {totalPages}
                 </span>
                 <button
@@ -487,9 +566,9 @@ export default function CollegesPage() {
           </div>
         ) : (
           <div className="glass-panel p-16 text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-teal-400 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-white mb-1">Loading College Directory…</h3>
-            <p className="text-xs text-white/50">Aggregating nationwide medical seat matrices</p>
+            <Loader2 className="h-8 w-8 animate-spin text-teal-600 dark:text-teal-400 mx-auto mb-3" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">Loading College Directory…</h3>
+            <p className="text-xs text-slate-500 dark:text-white/50">Aggregating nationwide medical seat matrices</p>
           </div>
         )}
       </div>
@@ -498,6 +577,13 @@ export default function CollegesPage() {
       <CutoffModal
         college={activeCollegeModal}
         onClose={() => setActiveCollegeModal(null)}
+      />
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        feature="wishlist"
       />
     </div>
   );

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Compass, 
   Sparkles, 
@@ -17,27 +18,32 @@ import {
   AlertCircle,
   ArrowRight,
   HelpCircle,
+  Crown,
+  Zap,
+  Lock,
+  Gift,
 } from 'lucide-react';
 import { getCollegeData } from '@/lib/engine/collegeData';
 import { scoreToRank } from '@/lib/engine/scoreToRank';
-import { 
-  runPredictionEngine, 
-  quotaMap, 
-  modeHints 
-} from '@/lib/engine/predictor';
+import { runPredictionEngine, modeHints, quotaMap } from '@/lib/engine/predictor';
 import { 
   CollegeIndexEntry, 
   PredictionResult, 
   StrategyKey 
 } from '@/lib/engine/types';
-import { DonutSummary } from '@/components/predictor/DonutSummary';
 import { CollegeCard } from '@/components/predictor/CollegeCard';
 import { CutoffModal } from '@/components/predictor/CutoffModal';
 import { CompareDrawer } from '@/components/predictor/CompareDrawer';
+import { DonutSummary } from '@/components/predictor/DonutSummary';
+import { PredictionLimitModal } from '@/components/predictor/PredictionLimitModal';
+import { PaymentCelebrationModal } from '@/components/payment/PaymentCelebrationModal';
+import { AuthModal } from '@/components/common/AuthModal';
 import { BrandIcon } from '@/components/common/BrandIcon';
+import { useAuth } from '@/lib/firebase/AuthContext';
 
 function PredictorContent() {
   const searchParams = useSearchParams();
+  const { user, profile, tierCategory, canPredict, recordPrediction } = useAuth();
 
   // Input States — initialized empty so predictor does NOT run until user enters details
   const [inputMode, setInputMode] = useState<'rank' | 'score'>('rank');
@@ -55,15 +61,21 @@ function PredictorContent() {
   // Mobile Filter Drawer & Scroll Reference
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState<boolean>(false);
   const resultsRef = React.useRef<HTMLDivElement>(null);
+  const autoRanRef = React.useRef<boolean>(false);
 
   // Execution & Validation States
   const [hasPredicted, setHasPredicted] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string>('');
   const [dataLoaded, setDataLoaded] = useState<boolean>(false);
+  const [introFinished, setIntroFinished] = useState<boolean>(false);
+  const [introFading, setIntroFading] = useState<boolean>(false);
+  const [loadPercent, setLoadPercent] = useState<number>(14);
+  const [loadStatus, setLoadStatus] = useState<string>('INITIALIZING MCC ADMISSION ENGINE…');
   const [collegeIndex, setCollegeIndex] = useState<Map<string, CollegeIndexEntry> | null>(null);
   const [rawResults, setRawResults] = useState<PredictionResult[]>([]);
   const [isPredicting, setIsPredicting] = useState<boolean>(false);
   const [processingStep, setProcessingStep] = useState<number>(0);
+  const [procPercent, setProcPercent] = useState<number>(12);
 
   // Filter & Search States
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -77,6 +89,16 @@ function PredictorContent() {
   // Modal & Compare States
   const [activeCollegeModal, setActiveCollegeModal] = useState<PredictionResult | null>(null);
   const [compareList, setCompareList] = useState<PredictionResult[]>([]);
+  const [limitModal, setLimitModal] = useState<{ open: boolean; reason: 'REGISTER_REQUIRED' | 'UPGRADE_REQUIRED'; message?: string }>({
+    open: false,
+    reason: 'REGISTER_REQUIRED'
+  });
+  const [celebrationModal, setCelebrationModal] = useState<{ open: boolean; planKey: string; paymentId: string }>({
+    open: false,
+    planKey: 'season',
+    paymentId: ''
+  });
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
 
   // 1. Parse query params from URL if user arrived from homepage estimator
   useEffect(() => {
@@ -100,28 +122,106 @@ function PredictorContent() {
     }
   }, [searchParams]);
 
-  // 2. Load dataset in the background
+  // 2. Load dataset with animated radar loader progression
   useEffect(() => {
+    setLoadPercent(14);
+    setLoadStatus('CONNECTING TO MCC ALLOTMENT ARCHIVE…');
+
+    const t1 = setTimeout(() => {
+      setLoadPercent(42);
+      setLoadStatus('INDEXING 17,671 CUTOFF SUMMARY RECORDS…');
+    }, 280);
+
+    const t2 = setTimeout(() => {
+      setLoadPercent(76);
+      setLoadStatus('PARSING 70,858 VERIFIED ALLOTMENTS…');
+    }, 650);
+
+    const t3 = setTimeout(() => {
+      setLoadPercent(94);
+      setLoadStatus('CALIBRATING STATISTICAL CUTOFF MARGINS…');
+    }, 1050);
+
+    let isMounted = true;
+
     getCollegeData()
       .then(({ index }) => {
+        if (!isMounted) return;
         setCollegeIndex(index);
-        setDataLoaded(true);
+        setTimeout(() => {
+          if (!isMounted) return;
+          setLoadPercent(100);
+          setLoadStatus('SYSTEM READY · LAUNCHING PREDICTOR');
+          setDataLoaded(true);
+          setTimeout(() => {
+            if (!isMounted) return;
+            setIntroFading(true);
+            setTimeout(() => {
+              if (!isMounted) return;
+              setIntroFinished(true);
+            }, 400);
+          }, 350);
+        }, 1200);
       })
       .catch((err) => {
         console.error('Failed to load cutoff database:', err);
+        if (!isMounted) return;
+        setLoadPercent(100);
+        setDataLoaded(true);
+        setIntroFading(true);
+        setTimeout(() => setIntroFinished(true), 300);
       });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, []);
 
   // 3. Execute Prediction Logic
   const executePrediction = (targetRank?: number, targetScore?: number, modeType: 'rank' | 'score' = 'rank') => {
     if (!collegeIndex) return;
+
+    // Check Entitlement Quota
+    const check = canPredict();
+    if (!check.allowed) {
+      if (check.reason === 'REGISTER_REQUIRED') {
+        setAuthModalOpen(true);
+      } else {
+        setLimitModal({
+          open: true,
+          reason: 'UPGRADE_REQUIRED',
+          message: check.message
+        });
+      }
+      return;
+    }
+
+    recordPrediction();
+
     setIsPredicting(true);
     setProcessingStep(1);
+    setProcPercent(14);
 
-    setTimeout(() => setProcessingStep(2), 180);
-    setTimeout(() => setProcessingStep(3), 360);
+    setTimeout(() => {
+      setProcessingStep(2);
+      setProcPercent(46);
+    }, 280);
+
+    setTimeout(() => {
+      setProcessingStep(3);
+      setProcPercent(78);
+    }, 600);
+
     setTimeout(() => {
       setProcessingStep(4);
+      setProcPercent(96);
+    }, 950);
+
+    setTimeout(() => {
+      setProcPercent(100);
       const calculatedRank = modeType === 'rank'
         ? (targetRank || 15000)
         : scoreToRank(targetScore || 640);
@@ -148,19 +248,20 @@ function PredictorContent() {
 
       // On mobile viewports, automatically smooth-scroll to results HUD
       setTimeout(() => {
-        if (typeof window !== 'undefined' && window.innerWidth <= 1024 && resultsRef.current) {
+        if (typeof window !== 'undefined' && resultsRef.current) {
           resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }, 100);
-    }, 500);
+    }, 1250);
   };
 
-  // 4. ONLY auto-run on initial load IF explicit rank or score was provided in URL params!
+  // 4. Auto-run on initial load ONLY IF explicit rank or score was provided in URL params
   useEffect(() => {
-    if (dataLoaded && collegeIndex) {
+    if (dataLoaded && collegeIndex && !autoRanRef.current) {
       const urlRank = searchParams.get('rank');
       const urlScore = searchParams.get('score');
       if (urlRank || urlScore) {
+        autoRanRef.current = true;
         const parsedR = urlRank ? parseInt(urlRank, 10) : undefined;
         const parsedS = urlScore ? parseInt(urlScore, 10) : undefined;
         executePrediction(parsedR, parsedS, urlScore ? 'score' : 'rank');
@@ -301,7 +402,7 @@ function PredictorContent() {
     }
   };
 
-  // Instant CSV Export
+  // CSV Export
   const handleExportCSV = () => {
     if (filteredResults.length === 0) return;
     const headers = ['College Name', 'State', 'Course', 'Quota', 'Category', 'College Type', 'Strategy', 'Chance Tier', 'Cutoff AIR', 'User Rank'];
@@ -333,15 +434,82 @@ function PredictorContent() {
     ? scoreToRank(parsedScoreNum)
     : null;
 
+  // Quota description pill
+  const quotaRemaining = tierCategory.unlimited
+    ? 'Unlimited'
+    : Math.max(0, (tierCategory.freeLimit || 3) - profile.predictionsCount);
+
   return (
-    <div className="w-full">
-      {/* ── 1. COMPACT HERO HEADER BAR (Matching predict.html) ── */}
+    <div className="w-full relative">
+      {/* ═══ HIGH-TECH GYROSCOPIC RADAR FULL-VIEWPORT INTRO LOADER ═══ */}
+      {!introFinished && (
+        <div
+          className={`fixed inset-0 z-[100] flex flex-col items-center justify-center p-4 transition-all duration-500 ease-in-out ${
+            introFading ? 'opacity-0 pointer-events-none scale-105' : 'opacity-100 scale-100'
+          } bg-[#070710]/98 backdrop-blur-2xl`}
+        >
+          {/* Background grid lines */}
+          <div className="absolute inset-0 pointer-events-none" style={{
+            backgroundImage: 'linear-gradient(rgba(0,229,170,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,170,0.04) 1px, transparent 1px)',
+            backgroundSize: '44px 44px'
+          }} />
+
+          <div className="page-intro-loader max-w-xs w-full mx-auto text-center px-4 animate-fade-in">
+            <div className="pil-backdrop-glow" />
+
+            {/* Radar Wheel — responsive sizing */}
+            <div className="pil-wheel-box !w-[110px] !h-[110px] sm:!w-[140px] sm:!h-[140px] mx-auto">
+              <div className="pil-ring pil-ring-1" />
+              <div className="pil-ring pil-ring-2" />
+              <div className="pil-ring pil-ring-3" />
+              <div className="pil-radar-sweep" />
+              <div className="pil-core !w-12 !h-12 sm:!w-14 sm:!h-14">
+                <Compass className="pil-core-icon !text-lg sm:!text-xl" />
+              </div>
+            </div>
+
+            {/* Heading */}
+            <h3 className="font-heading font-black text-lg sm:text-2xl text-white tracking-tight mb-0.5 mt-0">
+              NEET ADMISSION ENGINE
+            </h3>
+            <p className="text-[10px] sm:text-xs font-bold text-teal-300 uppercase tracking-widest mb-5 min-h-[1.5rem] flex items-center justify-center">
+              {loadStatus}
+            </p>
+
+            {/* Progress bar */}
+            <div className="pil-progress-bar-wrap w-full max-w-[240px] sm:max-w-xs mx-auto">
+              <div
+                className="pil-progress-bar-fill"
+                style={{ width: `${loadPercent}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between w-full max-w-[240px] sm:max-w-xs mx-auto mt-1.5 text-xs">
+              <span className="text-white/35 text-[10px] uppercase font-mono">Loading Engine</span>
+              <span className="mono-font text-xs font-extrabold text-teal-300">{loadPercent}%</span>
+            </div>
+
+            {/* Skip button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIntroFading(true);
+                setTimeout(() => setIntroFinished(true), 250);
+              }}
+              className="mt-7 px-5 py-2 rounded-full border border-white/[0.12] bg-white/[0.06] text-[11px] text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer"
+            >
+              Skip intro &rarr;
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 1. COMPACT HERO HEADER BAR ── */}
       <header className="hero-header">
         <div className="hero-content">
           <div className="hero-flex">
             <div className="hero-left">
               <div className="hero-tag">
-                <BrandIcon size={18} className="-ml-0.5" />
+                <span className="pulse"></span>
                 <span>NEET UG OFFICIAL COUNSELLING ENGINE</span>
               </div>
               <h1 className="hero-title text-xl sm:text-2xl md:text-3xl font-black">
@@ -360,15 +528,15 @@ function PredictorContent() {
 
             <div className="hero-stats-row hidden md:flex">
               <div className="hs-item">
-                <div className="hs-val text-teal-300">70,858</div>
+                <div className="hs-val text-teal-600 dark:text-teal-300">70,858</div>
                 <div className="hs-lbl">Allotments</div>
               </div>
               <div className="hs-item">
-                <div className="hs-val text-amber-300">17,671</div>
+                <div className="hs-val text-amber-600 dark:text-amber-300">17,671</div>
                 <div className="hs-lbl">Cutoff Records</div>
               </div>
               <div className="hs-item">
-                <div className="hs-val text-purple-300">36</div>
+                <div className="hs-val text-purple-600 dark:text-purple-300">36</div>
                 <div className="hs-lbl">States Covered</div>
               </div>
             </div>
@@ -376,30 +544,81 @@ function PredictorContent() {
         </div>
       </header>
 
+      {/* ── CLAIM PREDICTION & ENTITLEMENT ACTIVE BANNER ── */}
+      <div className="container-custom pt-4 pb-2">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-white/[0.04] border border-teal-500/30 dark:border-teal-400/30 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-600 dark:text-teal-300 flex items-center justify-center shrink-0">
+              <Gift className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                  {tierCategory.unlimited
+                    ? '👑 Counselling Pass Active (Unlimited Access)'
+                    : user
+                    ? 'Candidate Account Active'
+                    : '🎁 Claim 5 Free Trial Predictions'}
+                </span>
+                <span className="rounded-full bg-teal-500/20 text-teal-800 dark:text-teal-300 font-mono font-black text-[10px] px-2 py-[2px] border border-teal-500/40">
+                  {tierCategory.unlimited ? 'UNLIMITED' : user ? `${quotaRemaining} RUNS LEFT` : 'LOGIN REQUIRED'}
+                </span>
+              </div>
+              <p className="text-slate-600 dark:text-white/60 text-[11px] mt-0.5">
+                {tierCategory.unlimited
+                  ? 'All 750+ medical college predictions, choice filling tools, and round-by-round cutoffs unlocked.'
+                  : user
+                  ? `You have ${quotaRemaining} free AI simulations remaining on your candidate profile.`
+                  : 'Candidate login is required to claim your 5 Free AI Predictions across all 750+ medical colleges.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+            {!user ? (
+              <button
+                type="button"
+                onClick={() => setAuthModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-black text-xs shadow-sm hover:brightness-110 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Claim Free Trial (Sign In)</span>
+              </button>
+            ) : !tierCategory.unlimited ? (
+              <button
+                type="button"
+                onClick={() => setLimitModal({ open: true, reason: 'UPGRADE_REQUIRED' })}
+                className="px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold text-xs transition-colors flex items-center gap-1"
+              >
+                <Crown className="h-3.5 w-3.5 text-amber-500" />
+                <span>Upgrade to Pass</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
       {/* ── 2. PREDICTOR 2-COLUMN WRAPPER ── */}
       <div className="predictor-wrap">
-        {/* Mobile Quick Parameter Summary Bar (Visible on mobile/tablet <= 1024px when hasPredicted is true) */}
+        {/* Mobile Quick Parameter Summary Bar */}
         {hasPredicted && (
-          <div className="lg:hidden p-3 rounded-2xl bg-[#0c1024]/95 border border-teal-400/30 shadow-[0_8px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl flex items-center justify-between gap-2.5 animate-fade-in">
+          <div className="lg:hidden p-3 rounded-2xl bg-white/95 dark:bg-[#0c1024]/95 border border-slate-200 dark:border-teal-400/30 shadow-md dark:shadow-[0_8px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl flex items-center justify-between gap-2.5 animate-fade-in">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-400/15 border border-teal-400/30 text-teal-300 font-black text-xs shrink-0">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-700 dark:text-teal-300 font-black text-xs shrink-0">
                 ⚡
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1 text-xs font-bold text-white truncate">
-                  <span className="text-teal-300 mono-font">
+                <div className="flex items-center gap-1 text-xs font-bold text-slate-900 dark:text-white truncate">
+                  <span className="text-teal-700 dark:text-teal-300 mono-font">
                     {inputMode === 'rank' ? `AIR #${parseInt(rank || '0', 10).toLocaleString()}` : `Score ${score}/720`}
                   </span>
-                  <span className="text-white/30">·</span>
-                  <span className="text-purple-300">{category}</span>
-                  <span className="text-white/30">·</span>
-                  <span className="text-white/70">{selectedCourses.join(', ')}</span>
+                  <span className="text-slate-300 dark:text-white/30">·</span>
+                  <span className="text-purple-700 dark:text-purple-300">{category}</span>
+                  <span className="text-slate-300 dark:text-white/30">·</span>
+                  <span className="text-slate-600 dark:text-white/70">{selectedCourses.join(', ')}</span>
                 </div>
-                <div className="text-[11px] text-white/50 truncate flex items-center gap-1.5 mt-0.5">
-                  <span className="text-emerald-400 font-bold mono-font">{filteredResults.length}</span>
+                <div className="text-[11px] text-slate-500 dark:text-white/50 truncate flex items-center gap-1.5 mt-0.5">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold mono-font">{filteredResults.length}</span>
                   <span>matches found</span>
-                  <span className="text-white/20">·</span>
-                  <span className="text-white/40">{selectedQuotas.length} quotas</span>
                 </div>
               </div>
             </div>
@@ -407,7 +626,7 @@ function PredictorContent() {
             <button
               type="button"
               onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
-              className="px-3 py-1.5 rounded-xl border border-teal-400/40 bg-teal-400/15 text-teal-300 hover:bg-teal-400/25 text-xs font-bold shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+              className="px-3 py-1.5 rounded-xl border border-teal-500/40 bg-teal-500/15 text-teal-800 dark:text-teal-300 hover:bg-teal-500/25 text-xs font-bold shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
             >
               <span>{isMobileFiltersOpen ? 'Hide' : 'Edit'}</span>
               <span className="text-[10px]">{isMobileFiltersOpen ? '▲' : '▼'}</span>
@@ -432,6 +651,34 @@ function PredictorContent() {
               </div>
             )}
 
+            {/* Quota / Pass Status Pill */}
+            <div className="p-3 rounded-2xl bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                {tierCategory.unlimited ? (
+                  <Crown className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                ) : (
+                  <Zap className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                )}
+                <div>
+                  <div className="font-extrabold text-slate-900 dark:text-white text-[11px]">{tierCategory.label}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-white/50">
+                    {tierCategory.unlimited 
+                      ? 'Unlimited AI Predictions' 
+                      : `${quotaRemaining} predictions remaining`}
+                  </div>
+                </div>
+              </div>
+              {!tierCategory.unlimited && (
+                <button
+                  type="button"
+                  onClick={() => setLimitModal({ open: true, reason: user ? 'UPGRADE_REQUIRED' : 'REGISTER_REQUIRED' })}
+                  className="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:bg-amber-400/15 dark:border-amber-400/30 dark:text-amber-300 font-bold text-[10px] hover:bg-amber-500/25 transition-colors cursor-pointer"
+                >
+                  Upgrade
+                </button>
+              )}
+            </div>
+
             {/* Card 1: 01 Rank / Score */}
             <div className="filter-card">
               <div className="fc-header">
@@ -439,7 +686,7 @@ function PredictorContent() {
                 <div className="fc-title">Candidate Rank / Score</div>
               </div>
 
-              <div className="flex rounded-lg border border-white/10 bg-white/5 p-0.5 mb-3">
+              <div className="flex rounded-lg border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-white/5 p-0.5 mb-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -447,10 +694,10 @@ function PredictorContent() {
                     setValidationError('');
                   }}
                   className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                    inputMode === 'rank' ? 'bg-teal-400 text-slate-950 shadow' : 'text-white/60 hover:text-white'
+                    inputMode === 'rank' ? 'bg-teal-500 text-white font-black dark:bg-teal-400 dark:text-slate-950 shadow-sm' : 'text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  All India Rank (AIR)
+                  By Rank (AIR)
                 </button>
                 <button
                   type="button"
@@ -459,103 +706,54 @@ function PredictorContent() {
                     setValidationError('');
                   }}
                   className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                    inputMode === 'score' ? 'bg-teal-400 text-slate-950 shadow' : 'text-white/60 hover:text-white'
+                    inputMode === 'score' ? 'bg-teal-500 text-white font-black dark:bg-teal-400 dark:text-slate-950 shadow-sm' : 'text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  NEET Score (100–720)
+                  By Score (out of 720)
                 </button>
               </div>
 
               {inputMode === 'rank' ? (
                 <div>
+                  <label className="field-label">NEET All India Rank (AIR)</label>
                   <input
                     type="number"
-                    min="1"
-                    max="2500000"
+                    placeholder="e.g. 15000"
                     value={rank}
                     onChange={(e) => {
                       setRank(e.target.value);
-                      if (validationError) setValidationError('');
+                      setValidationError('');
                     }}
-                    className="field-input text-teal-300 font-bold"
-                    placeholder="Enter your AIR (e.g. 12500)"
-                    autoFocus={!hasPredicted}
+                    className="field-input"
                   />
-                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    <span className="text-[10px] text-white/40">Presets:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPreset(5000, 'rank')}
-                      className="text-[10px] text-teal-400 hover:text-teal-300 bg-white/5 px-2 py-0.5 rounded border border-white/10"
-                    >
-                      #5,000
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPreset(15000, 'rank')}
-                      className="text-[10px] text-teal-400 hover:text-teal-300 bg-white/5 px-2 py-0.5 rounded border border-white/10"
-                    >
-                      #15,000
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPreset(45000, 'rank')}
-                      className="text-[10px] text-teal-400 hover:text-teal-300 bg-white/5 px-2 py-0.5 rounded border border-white/10"
-                    >
-                      #45,000
-                    </button>
-                  </div>
+                  <p className="field-hint">Enter your overall NEET All India Rank from your scorecard</p>
                 </div>
               ) : (
                 <div>
+                  <label className="field-label">NEET Score (100–720)</label>
                   <input
                     type="number"
-                    min="100"
-                    max="720"
+                    placeholder="e.g. 640"
                     value={score}
                     onChange={(e) => {
                       setScore(e.target.value);
-                      if (validationError) setValidationError('');
+                      setValidationError('');
                     }}
-                    className="field-input text-teal-300 font-bold"
-                    placeholder="Enter Score (e.g. 645)"
-                    autoFocus={!hasPredicted}
+                    className="field-input"
                   />
                   {estimatedAirFromScore && (
-                    <p className="text-[11px] text-teal-300 font-semibold mt-1">
-                      Estimated AIR: ~{estimatedAirFromScore.toLocaleString()}
-                    </p>
+                    <div className="mt-2 p-2 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-800 dark:bg-teal-400/10 dark:border-teal-400/30 dark:text-teal-300 text-xs flex items-center justify-between font-mono animate-fade-in">
+                      <span>Approx. AIR:</span>
+                      <strong className="text-sm">#{estimatedAirFromScore.toLocaleString()}</strong>
+                    </div>
                   )}
-                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    <span className="text-[10px] text-white/40">Presets:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPreset(680, 'score')}
-                      className="text-[10px] text-teal-400 hover:text-teal-300 bg-white/5 px-2 py-0.5 rounded border border-white/10"
-                    >
-                      680
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPreset(645, 'score')}
-                      className="text-[10px] text-teal-400 hover:text-teal-300 bg-white/5 px-2 py-0.5 rounded border border-white/10"
-                    >
-                      645
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPreset(590, 'score')}
-                      className="text-[10px] text-teal-400 hover:text-teal-300 bg-white/5 px-2 py-0.5 rounded border border-white/10"
-                    >
-                      590
-                    </button>
-                  </div>
+                  <p className="field-hint">Approximated using calibrated NTA percentile distribution</p>
                 </div>
               )}
 
               {validationError && (
-                <div className="mt-2.5 p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-bold flex items-center gap-1.5 animate-fade-in">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <div className="mt-2.5 p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-1.5 animate-fade-in">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{validationError}</span>
                 </div>
               )}
@@ -570,31 +768,26 @@ function PredictorContent() {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="field-select"
+                className="field-select mb-1"
               >
-                <option value="Open">Open (General / UR)</option>
-                <option value="OBC">OBC</option>
-                <option value="EWS">EWS</option>
-                <option value="SC">SC</option>
-                <option value="ST">ST</option>
+                <option value="Open">Open (General / Unreserved)</option>
+                <option value="OBC">OBC (Other Backward Classes)</option>
+                <option value="EWS">EWS (Economically Weaker Section)</option>
+                <option value="SC">SC (Scheduled Caste)</option>
+                <option value="ST">ST (Scheduled Tribe)</option>
                 <option value="Open PwD">Open PwD</option>
                 <option value="OBC PwD">OBC PwD</option>
                 <option value="EWS PwD">EWS PwD</option>
                 <option value="SC PwD">SC PwD</option>
                 <option value="ST PwD">ST PwD</option>
               </select>
-              {category !== 'Open' && (
-                <p className="text-[11px] text-white/45 mt-1.5 leading-snug">
-                  * Evaluated for both {category} and Open (UR) merit seats automatically.
-                </p>
-              )}
             </div>
 
-            {/* Card 3: 03 Forecast Baseline Mode */}
+            {/* Card 3: 03 Mode */}
             <div className="filter-card">
               <div className="fc-header">
                 <div className="fc-num">03</div>
-                <div className="fc-title">Forecast Baseline Mode</div>
+                <div className="fc-title">Prediction Engine Mode</div>
               </div>
               <select
                 value={mode}
@@ -610,7 +803,7 @@ function PredictorContent() {
                 <option value="round3">Round 3 (Mop-Up)</option>
                 <option value="stray">Stray Vacancy (Final Allotments)</option>
               </select>
-              <p className="text-[11px] text-white/45 italic leading-snug">{modeHints[mode]}</p>
+              <p className="text-[11px] text-slate-500 dark:text-white/45 italic leading-snug">{modeHints[mode]}</p>
             </div>
 
             {/* Card 4: 04 Courses */}
@@ -629,8 +822,8 @@ function PredictorContent() {
                       onClick={() => toggleCourse(c)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                         isChecked
-                          ? 'bg-teal-400/20 text-teal-300 border-teal-400/40'
-                          : 'bg-white/5 text-white/60 border-white/10 hover:border-white/20'
+                          ? 'bg-teal-500/15 text-teal-800 border-teal-500/40 dark:bg-teal-400/20 dark:text-teal-300 dark:border-teal-400/40 font-black'
+                          : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 hover:text-slate-900 dark:bg-white/5 dark:text-white/60 dark:border-white/10 dark:hover:border-white/20'
                       }`}
                     >
                       {c}
@@ -656,23 +849,23 @@ function PredictorContent() {
                       onClick={() => toggleQuota(q)}
                       className={`flex items-center justify-between p-2 sm:p-2.5 rounded-lg text-xs font-medium border transition-all text-left cursor-pointer ${
                         isChecked
-                          ? 'bg-white/15 text-white border-white/30 font-bold'
-                          : 'bg-white/[0.02] text-white/50 border-white/5 hover:text-white'
+                          ? 'bg-teal-500/15 text-teal-900 border-teal-500/40 dark:bg-white/15 dark:text-white dark:border-white/30 font-bold'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-100 dark:bg-white/[0.02] dark:text-white/50 dark:border-white/5 dark:hover:text-white'
                       }`}
                     >
                       <span className="truncate pr-1">{q}</span>
-                      {isChecked && <Check className="h-3.5 w-3.5 text-teal-400 shrink-0" />}
+                      {isChecked && <Check className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400 shrink-0" />}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Run Predictor CTA */}
+            {/* Run Predictor CTA with Breathing Glow Animation */}
             <button
               type="submit"
               disabled={isPredicting || !dataLoaded}
-              className="predict-btn"
+              className="predict-btn cursor-pointer"
             >
               {isPredicting ? (
                 <>
@@ -696,20 +889,9 @@ function PredictorContent() {
               <span>Reset All Parameters</span>
             </button>
 
-            {/* Close filters button on mobile when opened */}
-            {hasPredicted && isMobileFiltersOpen && (
-              <button
-                type="button"
-                onClick={() => setIsMobileFiltersOpen(false)}
-                className="lg:hidden w-full py-2.5 rounded-xl border border-white/15 text-white/70 hover:text-white text-xs font-bold bg-white/5"
-              >
-                Close &amp; View {filteredResults.length} Matches
-              </button>
-            )}
-
             {/* Trust note */}
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-teal-400/[0.04] border border-teal-400/20 text-xs text-teal-300">
-              <ShieldCheck className="h-4 w-4 shrink-0 text-teal-400" />
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-teal-500/10 border border-teal-500/20 text-xs text-teal-800 dark:bg-teal-400/[0.04] dark:border-teal-400/20 dark:text-teal-300">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
               <span>Verified MCC Empirical Model · Zero synthetic predictions</span>
             </div>
           </form>
@@ -717,25 +899,56 @@ function PredictorContent() {
 
         {/* ── RIGHT COLUMN: RESULTS & INTELLIGENCE HUD ── */}
         <main className="results-area" ref={resultsRef}>
-          {!dataLoaded ? (
-            <div className="glass-panel p-10 sm:p-16 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-teal-400 mx-auto mb-3" />
-              <h3 className="text-base font-bold text-white mb-1">Loading MCC Allotment Database…</h3>
-              <p className="text-xs text-white/50">Indexing 17,671 cutoff records</p>
-            </div>
-          ) : isPredicting ? (
-            /* Multi-step Processing HUD */
-            <div className="glass-panel p-6 sm:p-10 text-center animate-fade-in border border-teal-400/30">
-              <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 animate-spin text-teal-400 mx-auto mb-3" />
-              <div className="text-xs sm:text-sm font-bold text-teal-300 mb-1">
-                Analyzing Cutoffs: Step {processingStep} of 4 ({processingStep * 25}%)
+          {isPredicting ? (
+            /* ═══ 4-STEP REAL-TIME PROCESSING HUD ═══ */
+            <div className="glass-panel p-6 sm:p-10 text-center animate-fade-in border-2 border-teal-400/40 shadow-[0_0_40px_rgba(0,229,170,0.2)] relative overflow-hidden">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-teal-400/5 via-transparent to-transparent" />
+              <Loader2 className="h-10 w-10 animate-spin text-teal-400 mx-auto mb-4" />
+              
+              <div className="text-sm sm:text-base font-extrabold text-teal-300 mb-1 font-heading">
+                Running Empirical Cutoff Engine: Step {processingStep} of 4 ({procPercent}%)
               </div>
-              <p className="text-[11px] sm:text-xs text-white/60 mb-4 sm:mb-6">Evaluating your rank across 70,858 verified historical seat records…</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] sm:text-[11px] text-white/50 max-w-md mx-auto">
-                <div className={processingStep >= 1 ? 'text-teal-300 font-bold' : ''}>1. Ingestion</div>
-                <div className={processingStep >= 2 ? 'text-teal-300 font-bold' : ''}>2. Cutoff Match</div>
-                <div className={processingStep >= 3 ? 'text-teal-300 font-bold' : ''}>3. Quota Tiers</div>
-                <div className={processingStep >= 4 ? 'text-teal-300 font-bold' : ''}>4. Strategy Pillars</div>
+              <p className="text-xs text-white/60 mb-6 max-w-md mx-auto">
+                Comparing your candidate rank across 70,858 historical MCC Round 1–Stray seat allocations…
+              </p>
+
+              {/* Step Timeline Indicator */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-w-lg mx-auto text-left">
+                {[
+                  { step: 1, name: '1. Ingestion', desc: 'Rank & Allotment Load' },
+                  { step: 2, name: '2. Cutoff Match', desc: '2024 & 2025 Rounds' },
+                  { step: 3, name: '3. Quota Tiers', desc: 'Category Margins' },
+                  { step: 4, name: '4. Strategy', desc: '4-Pillar Ranking' },
+                ].map((st) => {
+                  const isDone = processingStep > st.step;
+                  const isActive = processingStep === st.step;
+                  return (
+                    <div
+                      key={st.step}
+                      className={`p-2.5 rounded-xl border transition-all ${
+                        isActive
+                          ? 'bg-teal-400/15 border-teal-400/50 shadow-[0_0_15px_rgba(0,229,170,0.2)]'
+                          : isDone
+                          ? 'bg-emerald-500/10 border-emerald-500/30'
+                          : 'bg-white/[0.02] border-white/5 text-white/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        {isDone ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                        ) : isActive ? (
+                          <Loader2 className="h-3.5 w-3.5 text-teal-300 animate-spin shrink-0" />
+                        ) : (
+                          <div className="w-3.5 h-3.5 rounded-full border border-white/20" />
+                        )}
+                        <span className={`text-xs font-bold ${isActive ? 'text-teal-300' : isDone ? 'text-emerald-400' : 'text-white/40'}`}>
+                          {st.name}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-white/50 truncate">{st.desc}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : !hasPredicted ? (
@@ -756,60 +969,60 @@ function PredictorContent() {
                   <span>Awaiting Your NEET Details</span>
                 </div>
 
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white mb-2 sm:mb-3 font-heading">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 font-heading">
                   NEET College Predictor &amp; Cutoff Engine
                 </h2>
 
-                <p className="text-white/65 text-xs sm:text-sm md:text-base leading-relaxed mb-6 sm:mb-8">
-                  Enter your <strong className="text-white">All India Rank (AIR)</strong> or <strong className="text-white">NEET Score</strong> on the left control panel, select your category &amp; quotas, then click <strong className="text-teal-300">&ldquo;Find My Colleges&rdquo;</strong> to view your personalized college matches.
+                <p className="text-slate-600 dark:text-white/65 text-xs sm:text-sm md:text-base leading-relaxed mb-6 sm:mb-8">
+                  Enter your <strong className="text-slate-900 dark:text-white">All India Rank (AIR)</strong> or <strong className="text-slate-900 dark:text-white">NEET Score</strong> on the left control panel, select your category &amp; quotas, then click <strong className="text-teal-700 dark:text-teal-300">&ldquo;Find My Colleges&rdquo;</strong> to view your personalized college matches.
                 </p>
 
                 {/* Quick Test Presets */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.03] border border-white/10 mb-6 sm:mb-8 text-left">
-                  <span className="text-[10px] sm:text-[11px] font-bold text-white/50 uppercase tracking-wider block mb-2 sm:mb-2.5">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 mb-6 sm:mb-8 text-left">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-white/50 uppercase tracking-wider block mb-2 sm:mb-2.5">
                     ⚡ Or test with a sample rank preset:
                   </span>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => handleSelectPreset(5000, 'rank')}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-teal-400/10 border border-teal-400/30 text-teal-300 hover:bg-teal-400/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                      className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-800 dark:bg-teal-400/10 dark:border-teal-400/30 dark:text-teal-300 hover:bg-teal-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <span>AIR 5,000</span>
-                      <span className="text-[10px] text-teal-400/70 font-normal hidden sm:inline">(Top AIIMS &amp; GMCs)</span>
+                      <span className="text-[10px] text-teal-700 dark:text-teal-400/70 font-normal hidden sm:inline">(Top AIIMS &amp; GMCs)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSelectPreset(15000, 'rank')}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 hover:bg-amber-400/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                      className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <span>AIR 15,000</span>
-                      <span className="text-[10px] text-amber-400/70 font-normal hidden sm:inline">(State Sweet Spot)</span>
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400/70 font-normal hidden sm:inline">(State Sweet Spot)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSelectPreset(645, 'score')}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-purple-400/10 border border-purple-400/30 text-purple-300 hover:bg-purple-400/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                      className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-800 dark:bg-purple-400/10 dark:border-purple-400/30 dark:text-purple-300 hover:bg-purple-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <span>Score 645</span>
-                      <span className="text-[10px] text-purple-400/70 font-normal hidden sm:inline">(≈ AIR 8,200)</span>
+                      <span className="text-[10px] text-purple-700 dark:text-purple-400/70 font-normal hidden sm:inline">(≈ AIR 8,200)</span>
                     </button>
                   </div>
                 </div>
 
                 {/* 3 Step Flow Guide */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-left">
-                  <div className="p-3 sm:p-3.5 rounded-xl bg-white/[0.02] border border-white/8">
-                    <span className="text-teal-400 font-mono font-black text-xs block mb-1">01. ENTER DETAILS</span>
-                    <p className="text-xs text-white/60 leading-snug">Input your AIR or score and select candidate category.</p>
+                  <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/8">
+                    <span className="text-teal-700 dark:text-teal-400 font-mono font-black text-xs block mb-1">01. ENTER DETAILS</span>
+                    <p className="text-xs text-slate-600 dark:text-white/60 leading-snug">Input your AIR or score and select candidate category.</p>
                   </div>
-                  <div className="p-3 sm:p-3.5 rounded-xl bg-white/[0.02] border border-white/8">
-                    <span className="text-amber-400 font-mono font-black text-xs block mb-1">02. RUN PREDICTION</span>
-                    <p className="text-xs text-white/60 leading-snug">Evaluates 70,858 verified allotments from MCC 2024 &amp; 2025.</p>
+                  <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/8">
+                    <span className="text-amber-700 dark:text-amber-400 font-mono font-black text-xs block mb-1">02. RUN PREDICTION</span>
+                    <p className="text-xs text-slate-600 dark:text-white/60 leading-snug">Evaluates 70,858 verified allotments from MCC 2024 &amp; 2025.</p>
                   </div>
-                  <div className="p-3 sm:p-3.5 rounded-xl bg-white/[0.02] border border-white/8">
-                    <span className="text-emerald-400 font-mono font-black text-xs block mb-1">03. 4-PILLAR LIST</span>
-                    <p className="text-xs text-white/60 leading-snug">Review Safety, Target, Reach &amp; Long Shot categorized matches.</p>
+                  <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/8">
+                    <span className="text-emerald-700 dark:text-emerald-400 font-mono font-black text-xs block mb-1">03. 4-PILLAR LIST</span>
+                    <p className="text-xs text-slate-600 dark:text-white/60 leading-snug">Review Safety, Target, Reach &amp; Long Shot categorized matches.</p>
                   </div>
                 </div>
               </div>
@@ -827,8 +1040,8 @@ function PredictorContent() {
               {/* Stats Toolbar */}
               <div className="stats-bar">
                 <div className="flex items-center justify-between w-full md:w-auto gap-2">
-                  <div className="text-xs text-white/70 font-bold">
-                    Matches: <strong className="text-white mono-font text-sm">{filteredResults.length}</strong> colleges
+                  <div className="text-xs text-slate-600 dark:text-white/70 font-bold">
+                    Matches: <strong className="text-slate-900 dark:text-white mono-font text-sm">{filteredResults.length}</strong> colleges
                   </div>
                   {filteredResults.length > 0 && (
                     <button
@@ -859,7 +1072,7 @@ function PredictorContent() {
                     />
                   </div>
 
-                  {/* Dropdowns Grid for Mobile, Inline for Desktop */}
+                  {/* Dropdowns Grid */}
                   <div className="grid grid-cols-3 sm:flex items-center gap-1.5 w-full sm:w-auto">
                     {/* State Select */}
                     <select
@@ -946,7 +1159,7 @@ function PredictorContent() {
                       >
                         Previous
                       </button>
-                      <span className="text-xs text-white/60 px-2 mono-font">
+                      <span className="text-xs text-slate-600 dark:text-white/60 px-2 mono-font">
                         Page {currentPage} of {totalPages}
                       </span>
                       <button
@@ -961,9 +1174,9 @@ function PredictorContent() {
                 </div>
               ) : (
                 <div className="glass-panel p-12 text-center">
-                  <Building2 className="h-10 w-10 text-white/30 mx-auto mb-3" />
-                  <h3 className="text-base font-bold text-white mb-1">No colleges match your active filters</h3>
-                  <p className="text-xs text-white/50 max-w-sm mx-auto mb-4">
+                  <Building2 className="h-10 w-10 text-slate-400 dark:text-white/30 mx-auto mb-3" />
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">No colleges match your active filters</h3>
+                  <p className="text-xs text-slate-600 dark:text-white/50 max-w-sm mx-auto mb-4">
                     Try widening your quota selections, resetting state filters, or switching baseline mode.
                   </p>
                   <button
@@ -995,6 +1208,43 @@ function PredictorContent() {
         compareList={compareList}
         onRemove={(key) => setCompareList(compareList.filter(c => c.key !== key))}
         onClear={() => setCompareList([])}
+      />
+
+      {/* Paywall Prediction Limit Modal */}
+      {limitModal.open && (
+        <PredictionLimitModal
+          reason={limitModal.reason}
+          message={limitModal.message}
+          onClose={() => setLimitModal(prev => ({ ...prev, open: false }))}
+          onUpgradeSuccess={(planKey, paymentId) => {
+            setCelebrationModal({ open: true, planKey, paymentId });
+          }}
+        />
+      )}
+
+      {/* Post-Payment Celebration Modal */}
+      {celebrationModal.open && (
+        <PaymentCelebrationModal
+          planKey={celebrationModal.planKey}
+          paymentId={celebrationModal.paymentId}
+          onClose={() => setCelebrationModal(prev => ({ ...prev, open: false }))}
+        />
+      )}
+
+      {/* Auth Modal for Claiming 5 Free Trial Predictions */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        title="Claim Your 5 Free AI Predictions"
+        subtitle="Sign in or create a free candidate account to unlock instant cutoff forecasts across all 750+ medical colleges."
+        onSuccess={() => {
+          setAuthModalOpen(false);
+          const targetRank = rank ? parseInt(rank, 10) : undefined;
+          const targetScore = score ? parseInt(score, 10) : undefined;
+          if (targetRank || targetScore) {
+            executePrediction(targetRank, targetScore, inputMode);
+          }
+        }}
       />
     </div>
   );
