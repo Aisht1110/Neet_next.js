@@ -1,0 +1,10 @@
+# robots.txt for NEET Counselling Platform
+User-agent: *
+Allow: /
+
+# Disallow sensitive internal endpoints / assets
+Disallow: /.env*
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://neetcounsellor.online/sitemap.xml
