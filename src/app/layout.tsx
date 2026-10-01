@@ -29,7 +29,10 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://neetcounsellor.online'),
-  title: 'NEET Counselling — AI College Predictor & Cutoff Intelligence',
+  title: {
+    default: 'NEET Counselling — AI College Predictor & Cutoff Intelligence',
+    template: '%s | NEET Counselling'
+  },
   description:
     'Forecast MBBS, BDS & AYUSH admission chances using 70,000+ verified MCC allotment records from NEET 2024 & 2025. Comprehensive AIQ, State, and Category counselling strategies.',
   keywords: [
