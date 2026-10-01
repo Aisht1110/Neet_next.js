@@ -154,7 +154,7 @@ export function useUserData() {
           updatedAt: serverTimestamp(),
         }, { merge: true })
           .then(() => setSyncStatus('synced'))
-          .catch((err) => {
+          .catch((err: any) => {
             console.warn('Firestore save wishlist error:', err);
             setSyncStatus('offline');
           });
@@ -189,7 +189,7 @@ export function useUserData() {
           updatedAt: serverTimestamp(),
         }, { merge: true })
           .then(() => setSyncStatus('synced'))
-          .catch((err) => {
+          .catch((err: any) => {
             console.warn('Firestore save choices error:', err);
             setSyncStatus('offline');
           });

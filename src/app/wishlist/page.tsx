@@ -18,7 +18,8 @@ import {
   Sparkles, 
   CheckCircle2, 
   ShieldCheck,
-  Zap
+  Zap,
+  Mail
 } from 'lucide-react';
 import { useUserData } from '@/lib/store/useUserData';
 import { useAuth } from '@/lib/firebase/AuthContext';

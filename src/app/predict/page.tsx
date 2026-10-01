@@ -163,7 +163,7 @@ function PredictorContent() {
           }, 350);
         }, 1200);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error('Failed to load cutoff database:', err);
         if (!isMounted) return;
         setLoadPercent(100);
