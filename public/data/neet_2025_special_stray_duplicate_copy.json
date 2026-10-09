@@ -1,9 +1,0 @@
-{
-  "dataset": "NEET-UG MCC allotments",
-  "version": "1.0",
-  "purpose": "Duplicate-source marker for the uploaded 2025 Special Stray PDF",
-  "source": "355720d0-c1b0-4934-b15a-63fe7cc1b87d.pdf",
-  "duplicate_of": "neet_2025_special_stray_allotments.json",
-  "sha256": "13d44cd2ec47aad4e9e5bc78fa16139a6b6f3de356c36caeec07d20ba4e1d41f",
-  "note": "Duplicate upload; records are not duplicated in the combined database."
-}
