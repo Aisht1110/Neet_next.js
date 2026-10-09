@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
   Sparkles, 
@@ -69,7 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     };
   }, [isOpen, defaultMode]);
 
-  if (!mounted || !isOpen) return null;
+  if (!mounted) return null;
 
   const handleGoogleSignIn = async () => {
     setError('');
@@ -123,20 +124,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-overlay">
-      <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-[#0c0c1e] border border-slate-200 dark:border-white/[0.12] shadow-[0_20px_60px_rgba(0,0,0,0.4)] overflow-hidden animate-modal-content">
-        {/* Glow Header Accent */}
-        <div className="h-1 bg-gradient-to-r from-teal-400 via-cyan-400 to-indigo-500" />
-
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          type="button"
-          className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-white/60 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer z-10"
-          aria-label="Close modal"
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="auth-modal-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
         >
-          <X className="h-4 w-4" />
-        </button>
+          <motion.div
+            key="auth-modal-content"
+            initial={{ opacity: 0, scale: 0.94, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 16 }}
+            transition={{ type: "spring", duration: 0.35, bounce: 0.15 }}
+            className="relative w-full max-w-md rounded-3xl bg-white dark:bg-[#0c0c1e] border border-slate-200 dark:border-white/[0.12] shadow-[0_20px_60px_rgba(0,0,0,0.4)] overflow-hidden"
+          >
+            {/* Glow Header Accent */}
+            <div className="h-1 bg-gradient-to-r from-teal-400 via-cyan-400 to-indigo-500" />
+
+            {/* Close Button */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={onClose}
+              type="button"
+              className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-white/60 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer z-10"
+              aria-label="Close modal"
+            >
+              <X className="h-4 w-4" />
+            </motion.button>
 
         <div className="p-6 sm:p-7">
           {/* Top Value Badge */}
@@ -153,14 +173,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </p>
           </div>
 
-          {/* Mode Switcher */}
-          <div className="flex p-1 rounded-xl bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] mb-4">
+          {/* Mode Switcher with animated pill */}
+          <div className="relative flex p-1 rounded-xl bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] mb-4">
             <button
               type="button"
               onClick={() => { setAuthMode('signup'); setError(''); }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
                 authMode === 'signup'
-                  ? 'bg-teal-500 text-white dark:bg-teal-400 dark:text-slate-950 shadow-sm'
+                  ? 'text-white dark:text-slate-950 font-black'
                   : 'text-slate-600 dark:text-white/50 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -169,14 +189,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <button
               type="button"
               onClick={() => { setAuthMode('login'); setError(''); }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
                 authMode === 'login'
-                  ? 'bg-teal-500 text-white dark:bg-teal-400 dark:text-slate-950 shadow-sm'
+                  ? 'text-white dark:text-slate-950 font-black'
                   : 'text-slate-600 dark:text-white/50 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Sign In
             </button>
+            <motion.div
+              layout
+              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              className="absolute top-1 bottom-1 rounded-lg bg-teal-500 dark:bg-teal-400 shadow-sm"
+              style={{
+                left: authMode === 'signup' ? '4px' : '50%',
+                width: 'calc(50% - 4px)',
+              }}
+            />
           </div>
 
           {/* Error Message */}
@@ -188,7 +217,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {/* Google 1-Click Button */}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             type="button"
             onClick={handleGoogleSignIn}
             disabled={isSubmitting}
@@ -208,7 +239,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             ) : (
               <span>Continue with Google</span>
             )}
-          </button>
+          </motion.button>
 
           {/* Divider */}
           <div className="relative mb-3.5 text-center">
@@ -300,7 +331,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
               type="submit"
               disabled={isSubmitting}
               className="btn-primary w-full py-2.5 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md mt-1"
@@ -313,21 +346,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               ) : (
                 <span>{authMode === 'signup' ? 'Claim 5 Free Predictions →' : 'Sign In to Account →'}</span>
               )}
-            </button>
+            </motion.button>
           </form>
 
           {/* Quick Demo Test Access Buttons */}
           <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 space-y-1.5 text-center">
             <div className="flex items-center gap-2">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={() => handleQuickDemo('free')}
                 disabled={isSubmitting}
                 className="flex-1 py-1.5 px-2 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white text-[11px] font-bold transition-all cursor-pointer"
               >
                 Test Basic Free (5 Runs)
-              </button>
-              <button
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={() => handleQuickDemo('pro_vip')}
                 disabled={isSubmitting}
@@ -335,15 +372,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               >
                 <Crown className="h-3 w-3 text-amber-500" />
                 <span>Test VIP Pass</span>
-              </button>
+              </motion.button>
             </div>
             <p className="text-[10px] text-slate-500 dark:text-white/40">
               1-Click instant test login for evaluation &amp; trial verification.
             </p>
           </div>
         </div>
-      </div>
-    </div>,
-    document.body
-  );
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>,
+document.body
+);
 };

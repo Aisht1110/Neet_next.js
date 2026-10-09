@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
 import { 
   Crown, 
@@ -57,7 +58,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen || !mounted) return null;
+  if (!mounted) return null;
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) {
@@ -129,26 +130,40 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   const info = getFeatureHeadline();
 
   return createPortal(
-    <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-fade-in"
-      onClick={onClose}
-    >
-      <div 
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl sm:rounded-3xl border-2 border-amber-500/40 bg-white dark:bg-[#0c0d16] p-5 sm:p-7 shadow-[0_10px_50px_rgba(245,158,11,0.22)] relative overflow-hidden animate-modal-content text-left"
-      >
-        {/* Subtle background gradient glow */}
-        <div className="absolute -top-24 -right-24 w-60 h-60 rounded-full bg-amber-500/10 dark:bg-amber-400/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-60 h-60 rounded-full bg-teal-500/10 dark:bg-teal-400/10 blur-3xl pointer-events-none" />
-
-        {/* Close Button */}
-        <button
-          type="button"
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div 
+          key="upgrade-modal-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md"
           onClick={onClose}
-          className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer z-10"
         >
-          <X className="h-4 w-4" />
-        </button>
+          <motion.div 
+            key="upgrade-modal-card"
+            initial={{ opacity: 0, scale: 0.94, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 16 }}
+            transition={{ type: "spring", duration: 0.35, bounce: 0.15 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl sm:rounded-3xl border-2 border-amber-500/40 bg-white dark:bg-[#0c0d16] p-5 sm:p-7 shadow-[0_10px_50px_rgba(245,158,11,0.22)] relative overflow-hidden text-left"
+          >
+            {/* Subtle background gradient glow */}
+            <div className="absolute -top-24 -right-24 w-60 h-60 rounded-full bg-amber-500/10 dark:bg-amber-400/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-60 h-60 rounded-full bg-teal-500/10 dark:bg-teal-400/10 blur-3xl pointer-events-none" />
+
+            {/* Close Button */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              type="button"
+              onClick={onClose}
+              className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer z-10"
+            >
+              <X className="h-4 w-4" />
+            </motion.button>
 
         {/* Header Tag */}
         <div className="flex items-center gap-2 mb-3">
@@ -240,7 +255,9 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             </div>
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             type="button"
             onClick={handleUpgradeNow}
             disabled={isProcessing}
@@ -257,7 +274,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                 <span>Unlock Season Pass (₹{finalPrice})</span>
               </>
             )}
-          </button>
+          </motion.button>
         </div>
 
         {/* Security / Guarantee footer */}
@@ -267,8 +284,10 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             <span>Official Razorpay 256-Bit Encrypted · Instant Activation</span>
           </span>
         </div>
-      </div>
-    </div>,
-    document.body
-  );
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>,
+document.body
+);
 };

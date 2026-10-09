@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { motion } from 'motion/react';
 import { StrategyKey } from '@/lib/engine/types';
 
 interface DonutSummaryProps {
@@ -51,7 +52,12 @@ export const DonutSummary: React.FC<DonutSummaryProps> = ({
   ];
 
   return (
-    <div className="glass-panel p-3.5 sm:p-6 mb-4 sm:mb-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+      className="glass-panel p-3.5 sm:p-6 mb-4 sm:mb-6"
+    >
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
         {/* Left: Donut Chart */}
         <div className="relative flex items-center justify-center shrink-0">
@@ -134,9 +140,11 @@ export const DonutSummary: React.FC<DonutSummaryProps> = ({
           {pillars.map((p) => {
             const isSelected = activeFilter === p.key;
             return (
-              <button
+              <motion.button
                 key={p.key}
                 type="button"
+                whileHover={{ y: -2, scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => onSelectFilter(isSelected ? null : p.key)}
                 className={`flex flex-col items-start p-2.5 sm:p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   isSelected
@@ -162,11 +170,11 @@ export const DonutSummary: React.FC<DonutSummaryProps> = ({
                 <span className="text-[10px] sm:text-[11px] text-white/40">
                   {total > 0 ? Math.round((p.count / total) * 100) : 0}% of choices
                 </span>
-              </button>
+              </motion.button>
             );
           })}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

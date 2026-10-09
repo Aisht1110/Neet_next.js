@@ -97,6 +97,7 @@ export function normalizeQuota(raw: string): string {
   const qClean = qLower.replace(/\s+/g, '');
   if (qClean.includes('ipuniversity') || (qClean.includes('ipu') && qClean.includes('quota'))) return 'IP University Quota';
   if (qClean.includes('delhiuniversity') || (qClean.includes('du') && qClean.includes('quota'))) return 'Delhi University Quota';
+  if (qLower.includes('foreign')) return 'Foreign Country Quota';
   if (qLower.includes('all india') || qLower === 'aiq' || qClean === 'allindiaquota') return 'All India';
   if (qClean.includes('openseat')) return 'Open Seat Quota';
   if (qClean.includes('deemed')) return 'Deemed/Paid Seats Quota';

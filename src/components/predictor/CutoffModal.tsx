@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
   Sparkles, 
@@ -52,9 +53,6 @@ interface CutoffModalProps {
 
 export const CutoffModal: React.FC<CutoffModalProps> = ({ college, onClose }) => {
   const [mounted, setMounted] = useState(false);
-  const [selectedModalQuota, setSelectedModalQuota] = useState<string>('all');
-  const [selectedModalCategory, setSelectedModalCategory] = useState<string>('all');
-  const modalScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -77,28 +75,6 @@ export const CutoffModal: React.FC<CutoffModalProps> = ({ college, onClose }) =>
     };
   }, [college]);
 
-  // Reset modal scroll position to top whenever a college is opened
-  useEffect(() => {
-    if (college && modalScrollRef.current) {
-      modalScrollRef.current.scrollTop = 0;
-      const t = setTimeout(() => {
-        if (modalScrollRef.current) modalScrollRef.current.scrollTop = 0;
-      }, 50);
-      return () => clearTimeout(t);
-    }
-  }, [college]);
-
-  // Reset selected filters when college changes
-  useEffect(() => {
-    if (college) {
-      setSelectedModalQuota(college.quota || 'all');
-      setSelectedModalCategory(college.category || 'all');
-    } else {
-      setSelectedModalQuota('all');
-      setSelectedModalCategory('all');
-    }
-  }, [college]);
-
   // Close on Escape key press
   useEffect(() => {
     if (!college) return;
@@ -109,7 +85,32 @@ export const CutoffModal: React.FC<CutoffModalProps> = ({ college, onClose }) =>
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [college, onClose]);
 
-  if (!mounted || !college) return null;
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence mode="wait">
+      {college && (
+        <CutoffModalContent
+          key={college.key || college.name}
+          college={college}
+          onClose={onClose}
+        />
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+};
+
+const CutoffModalContent: React.FC<{ college: CutoffModalCollegeData; onClose: () => void }> = ({ college, onClose }) => {
+  const [selectedModalQuota, setSelectedModalQuota] = useState<string>(college.quota || 'all');
+  const [selectedModalCategory, setSelectedModalCategory] = useState<string>(college.category || 'all');
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (modalScrollRef.current) {
+      modalScrollRef.current.scrollTop = 0;
+    }
+  }, []);
 
   const normalizeRName = (r: string) => {
     const s = String(r || '').trim();
@@ -190,10 +191,14 @@ export const CutoffModal: React.FC<CutoffModalProps> = ({ college, onClose }) =>
   const feeInfo = getEstimatedFee(college.name, quotaName);
   const clinicalInfo = getClinicalExposure(college.name);
 
-  return createPortal(
-    <div 
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-modal-overlay"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md"
       style={{
         position: 'fixed',
         top: 0,
@@ -205,19 +210,25 @@ export const CutoffModal: React.FC<CutoffModalProps> = ({ college, onClose }) =>
         zIndex: 9999,
       }}
     >
-      <div 
-        className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-[86vh] flex flex-col rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0f1122] text-slate-900 dark:text-white shadow-2xl animate-modal-content overflow-hidden m-auto"
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.94, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 16 }}
+        transition={{ type: "spring", duration: 0.35, bounce: 0.12 }}
+        className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-[86vh] flex flex-col rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0f1122] text-slate-900 dark:text-white shadow-2xl overflow-hidden m-auto"
       >
         {/* Pinned Header (Always visible, never scrolls away) */}
         <div className="shrink-0 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 dark:border-white/10 relative bg-white dark:bg-[#0f1122]">
           {/* Close Button */}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={onClose}
             aria-label="Close dialog"
             className="absolute top-3 right-3 sm:top-4 sm:right-4 flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-950 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10 dark:hover:text-white transition-colors cursor-pointer z-10"
           >
             <X className="h-4 w-4" />
-          </button>
+          </motion.button>
 
           <div className="pr-8 sm:pr-10">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
@@ -560,15 +571,17 @@ export const CutoffModal: React.FC<CutoffModalProps> = ({ college, onClose }) =>
               </a>
             )}
           </div>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={onClose}
             className="btn-secondary py-2 px-5 text-xs font-bold cursor-pointer"
           >
             Close Breakdown
-          </button>
+          </motion.button>
         </div>
-      </div>
-    </div>,
-    document.body
+      </motion.div>
+    </motion.div>
   );
 };
+

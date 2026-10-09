@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Scale, 
   X, 
@@ -49,79 +50,107 @@ export const CompareDrawer: React.FC<CompareDrawerProps> = ({
     };
   }, [isOpenModal]);
 
-  if (!mounted || compareList.length === 0) return null;
+  if (!mounted) return null;
 
   return createPortal(
     <>
       {/* Floating Bottom Bar */}
-      <div className="fixed bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-2xl rounded-2xl border border-slate-300 dark:border-teal-400/40 bg-white/95 dark:bg-[#0c1024]/95 p-2.5 sm:p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.7)] backdrop-blur-xl animate-modal-content">
-        <div className="flex items-center justify-between gap-2 sm:gap-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/20 text-teal-700 dark:text-teal-300 shrink-0">
-              <Scale className="h-4 w-4" />
-            </div>
-            <div>
-              <span className="text-xs font-bold text-slate-900 dark:text-white block">Compare ({compareList.length}/3)</span>
-              <span className="text-[11px] text-slate-500 dark:text-white/50 hidden sm:inline">Side-by-side cutoff &amp; fee comparison</span>
-            </div>
-          </div>
+      <AnimatePresence>
+        {compareList.length > 0 && (
+          <motion.div
+            key="compare-bottom-bar"
+            initial={{ opacity: 0, y: 50, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 50, x: "-50%" }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+            className="fixed bottom-3 sm:bottom-5 left-1/2 z-40 w-[94%] max-w-2xl rounded-2xl border border-slate-300 dark:border-teal-400/40 bg-white/95 dark:bg-[#0c1024]/95 p-2.5 sm:p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+          >
+            <div className="flex items-center justify-between gap-2 sm:gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/20 text-teal-700 dark:text-teal-300 shrink-0">
+                  <Scale className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block">Compare ({compareList.length}/3)</span>
+                  <span className="text-[11px] text-slate-500 dark:text-white/50 hidden sm:inline">Side-by-side cutoff &amp; fee comparison</span>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {compareList.map((c) => (
-              <div key={c.key} className="hidden md:flex items-center gap-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2.5 py-1 text-[11px] text-slate-700 dark:text-white/80">
-                <span className="truncate max-w-[120px]">{c.name}</span>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {compareList.map((c) => (
+                  <div key={c.key} className="hidden md:flex items-center gap-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2.5 py-1 text-[11px] text-slate-700 dark:text-white/80">
+                    <span className="truncate max-w-[120px]">{c.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(c.key)}
+                      className="text-slate-400 dark:text-white/40 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  type="button"
+                  onClick={() => setIsOpenModal(true)}
+                  className="btn-primary py-1.5 sm:py-2 px-3 sm:px-4 text-xs font-bold whitespace-nowrap cursor-pointer"
+                >
+                  Compare
+                </motion.button>
+
                 <button
                   type="button"
-                  onClick={() => onRemove(c.key)}
-                  className="text-slate-400 dark:text-white/40 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                  onClick={onClear}
+                  className="text-xs text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white px-1.5 sm:px-2 cursor-pointer"
                 >
-                  <X className="h-3 w-3" />
+                  Clear
                 </button>
               </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={() => setIsOpenModal(true)}
-              className="btn-primary py-1.5 sm:py-2 px-3 sm:px-4 text-xs font-bold whitespace-nowrap cursor-pointer"
-            >
-              Compare
-            </button>
-
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-xs text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white px-1.5 sm:px-2 cursor-pointer"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Side-by-Side Comparison Modal */}
-      {isOpenModal && (
-        <div 
-          onClick={(e) => { if (e.target === e.currentTarget) setIsOpenModal(false); }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-modal-overlay"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100vw',
-            height: '100vh',
-            zIndex: 9999,
-          }}
-        >
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0f1122] text-slate-900 dark:text-white p-4 sm:p-6 shadow-2xl animate-modal-content m-auto">
-            <button
-              onClick={() => setIsOpenModal(false)}
-              className="absolute top-4 right-4 sm:top-5 sm:right-5 flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/70 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-950 dark:hover:text-white cursor-pointer"
+      <AnimatePresence>
+        {isOpenModal && (
+          <motion.div 
+            key="compare-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setIsOpenModal(false); }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 9999,
+            }}
+          >
+            <motion.div
+              key="compare-modal-card"
+              initial={{ opacity: 0, scale: 0.94, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 16 }}
+              transition={{ type: "spring", duration: 0.35, bounce: 0.12 }}
+              className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0f1122] text-slate-900 dark:text-white p-4 sm:p-6 shadow-2xl m-auto"
             >
-              <X className="h-4 w-4" />
-            </button>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setIsOpenModal(false)}
+                className="absolute top-4 right-4 sm:top-5 sm:right-5 flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/70 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-950 dark:hover:text-white cursor-pointer z-10"
+              >
+                <X className="h-4 w-4" />
+              </motion.button>
 
             <div className="mb-4 sm:mb-6 pr-8">
               <h3 className="text-base sm:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2">
@@ -205,18 +234,21 @@ export const CompareDrawer: React.FC<CompareDrawerProps> = ({
             </div>
 
             <div className="flex justify-end pt-5 mt-5 border-t border-slate-200 dark:border-white/10">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 type="button"
                 onClick={() => setIsOpenModal(false)}
                 className="btn-secondary py-2 px-6 text-xs cursor-pointer"
               >
                 Close Comparison
-              </button>
+              </motion.button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
-    </>,
-    document.body
-  );
+    </AnimatePresence>
+  </>,
+  document.body
+);
 };

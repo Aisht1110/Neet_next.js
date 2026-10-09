@@ -85,10 +85,15 @@ export default function HomePage() {
     : (estimatedAir || 12500);
 
   const getTeaserColleges = (r: number) => {
+    if (r <= 60) return [
+      { chip: 'AIIMS', chipClass: 'chip-AIIMS', name: 'AIIMS, New Delhi', pct: '99%', status: 'Target R1', cutoff: '47 AIR' },
+      { chip: 'GMC', chipClass: 'chip-GMC', name: 'Maulana Azad Medical College (MAMC)', pct: '98%', status: 'Very Safe', cutoff: '145 AIR' },
+      { chip: 'JIPMER', chipClass: 'chip-Govt', name: 'JIPMER, Puducherry', pct: '97%', status: 'Very Safe', cutoff: '277 AIR' },
+    ];
     if (r <= 500) return [
-      { chip: 'AIIMS', chipClass: 'chip-AIIMS', name: 'AIIMS, New Delhi', pct: '98%', status: 'Very Safe', cutoff: '57 AIR' },
       { chip: 'GMC', chipClass: 'chip-GMC', name: 'Maulana Azad Medical College (MAMC)', pct: '91%', status: 'Target R1', cutoff: '145 AIR' },
       { chip: 'JIPMER', chipClass: 'chip-Govt', name: 'JIPMER, Puducherry', pct: '85%', status: 'Competitive', cutoff: '277 AIR' },
+      { chip: 'AIIMS', chipClass: 'chip-AIIMS', name: 'AIIMS, Bhopal', pct: '88%', status: 'Target R1', cutoff: '578 AIR' },
     ];
     if (r <= 2500) return [
       { chip: 'AIIMS', chipClass: 'chip-AIIMS', name: 'AIIMS, Bhubaneswar', pct: '94%', status: 'Very Safe', cutoff: '1,420 AIR' },

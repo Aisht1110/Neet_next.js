@@ -45,7 +45,7 @@ export const PLANS: Record<string, PlanDetails> = {
 };
 
 const WORKER_BASE_URL = process.env.NEXT_PUBLIC_PAYMENT_WORKER_URL || "https://neet-payment-worker.upmatripathi500.workers.dev";
-const FALLBACK_RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || "rzp_test_SP68tZHdB0UVLX";
+const FALLBACK_RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || "";
 
 interface RazorpaySuccessResponse {
   razorpay_payment_id: string;

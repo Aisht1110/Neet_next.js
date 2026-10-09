@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building2, 
   MapPin, 
@@ -74,7 +75,15 @@ export const CollegeCard: React.FC<CollegeCardProps> = ({
   };
 
   return (
-    <div 
+    <motion.div 
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ 
+        duration: 0.32, 
+        delay: Math.min(((indexNum - 1) % 20) * 0.035, 0.35), 
+        ease: [0.16, 1, 0.3, 1] 
+      }}
+      whileHover={{ y: -3, transition: { duration: 0.15 } }}
       onClick={handleToggle}
       role="button"
       tabIndex={0}
@@ -274,7 +283,9 @@ export const CollegeCard: React.FC<CollegeCardProps> = ({
             )}
 
             {/* Save to Wishlist Button (Gated to VIP) */}
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.92 }}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -303,10 +314,12 @@ export const CollegeCard: React.FC<CollegeCardProps> = ({
               <span className="text-[11px] sm:text-xs">
                 {!tierCategory.canAccessWishlist ? 'Save' : (wishlisted ? 'Saved' : 'Save')}
               </span>
-            </button>
+            </motion.button>
 
             {/* Add to Choice Fill (Gated to VIP) */}
-            <button
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -347,10 +360,12 @@ export const CollegeCard: React.FC<CollegeCardProps> = ({
               ) : (
                 <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               )}
-            </button>
+            </motion.button>
 
             {/* View Details / Cutoff Toggle Button for sm+ screens */}
-            <button
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -375,24 +390,30 @@ export const CollegeCard: React.FC<CollegeCardProps> = ({
                   <ChevronDown className="h-3.5 w-3.5 opacity-70" />
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
         </div>
       </div>
 
       {/* ── IN-PLACE EXPANDABLE CARD BREAKDOWN ── */}
-      {isExpanded && (
-        <div 
-          className="col-span-full w-full"
-          style={{ gridColumn: '1 / -1' }}
-        >
-          <CardCutoffInline 
-            college={college} 
-            onCollapse={() => setIsExpanded(false)}
-            onOpenFullModal={() => onOpenDetails(college)}
-          />
-        </div>
-      )}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="col-span-full w-full overflow-hidden"
+            style={{ gridColumn: '1 / -1' }}
+          >
+            <CardCutoffInline 
+              college={college} 
+              onCollapse={() => setIsExpanded(false)}
+              onOpenFullModal={() => onOpenDetails(college)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── UPGRADE PROMPT MODAL ── */}
       {upgradeFeature && (
@@ -402,6 +423,6 @@ export const CollegeCard: React.FC<CollegeCardProps> = ({
           feature={upgradeFeature}
         />
       )}
-    </div>
+    </motion.div>
   );
 };

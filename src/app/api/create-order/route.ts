@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const WORKER_URL = process.env.PAYMENT_WORKER_URL || process.env.NEXT_PUBLIC_PAYMENT_WORKER_URL || 'https://neet-payment-worker.upmatripathi500.workers.dev';
-const FALLBACK_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || 'rzp_test_SP68tZHdB0UVLX';
+const FALLBACK_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || '';
 
 const PLANS_CATALOG: Record<string, { price: number; amountPaise: number; name: string; tier: string }> = {
   basic: { price: 149, amountPaise: 14900, name: 'Basic Pass 2026', tier: 'pro_plus' },

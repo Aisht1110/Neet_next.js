@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { motion } from 'motion/react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -862,7 +863,9 @@ function PredictorContent() {
             </div>
 
             {/* Run Predictor CTA with Breathing Glow Animation */}
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               type="submit"
               disabled={isPredicting || !dataLoaded}
               className="predict-btn cursor-pointer"
@@ -878,7 +881,7 @@ function PredictorContent() {
                   <span>{hasPredicted ? 'Update Matches' : 'Find My Colleges (Run Engine)'}</span>
                 </>
               )}
-            </button>
+            </motion.button>
 
             <button
               type="button"
@@ -983,30 +986,36 @@ function PredictorContent() {
                     ⚡ Or test with a sample rank preset:
                   </span>
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.96 }}
                       type="button"
                       onClick={() => handleSelectPreset(5000, 'rank')}
                       className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-800 dark:bg-teal-400/10 dark:border-teal-400/30 dark:text-teal-300 hover:bg-teal-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <span>AIR 5,000</span>
                       <span className="text-[10px] text-teal-700 dark:text-teal-400/70 font-normal hidden sm:inline">(Top AIIMS &amp; GMCs)</span>
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.96 }}
                       type="button"
                       onClick={() => handleSelectPreset(15000, 'rank')}
                       className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <span>AIR 15,000</span>
                       <span className="text-[10px] text-amber-700 dark:text-amber-400/70 font-normal hidden sm:inline">(State Sweet Spot)</span>
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.96 }}
                       type="button"
                       onClick={() => handleSelectPreset(645, 'score')}
                       className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-800 dark:bg-purple-400/10 dark:border-purple-400/30 dark:text-purple-300 hover:bg-purple-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <span>Score 645</span>
                       <span className="text-[10px] text-purple-700 dark:text-purple-400/70 font-normal hidden sm:inline">(≈ AIR 8,200)</span>
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
 
@@ -1029,7 +1038,11 @@ function PredictorContent() {
             </div>
           ) : (
             /* ── RESULTS DISPLAYED AFTER USER RUNS PREDICTION ── */
-            <div>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+            >
               {/* Donut Summary Dashboard */}
               <DonutSummary
                 counts={counts}
@@ -1192,7 +1205,7 @@ function PredictorContent() {
                   </button>
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
         </main>
       </div>

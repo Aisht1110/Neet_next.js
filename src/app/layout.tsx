@@ -104,7 +104,7 @@ export default function RootLayout({
           id="neet-payment-config"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
-            __html: `window.PAYMENT_WORKER_URL = "${process.env.NEXT_PUBLIC_PAYMENT_WORKER_URL || 'https://neet-payment-worker.upmatripathi500.workers.dev'}"; window.PAYMENT_CONFIG = { workerBaseUrl: window.PAYMENT_WORKER_URL, fallbackRazorpayKey: "${process.env.NEXT_PUBLIC_RAZORPAY_KEY || 'rzp_test_SP68tZHdB0UVLX'}" };`,
+            __html: `window.PAYMENT_WORKER_URL = "${process.env.NEXT_PUBLIC_PAYMENT_WORKER_URL || 'https://neet-payment-worker.upmatripathi500.workers.dev'}"; window.PAYMENT_CONFIG = { workerBaseUrl: window.PAYMENT_WORKER_URL, fallbackRazorpayKey: "${process.env.NEXT_PUBLIC_RAZORPAY_KEY || ''}" };`,
           }}
         />
         <Script
