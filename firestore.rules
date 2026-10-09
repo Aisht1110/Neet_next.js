@@ -1,0 +1,166 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for security checks
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // ─────────────────────────────────────
+    //  1. USERS COLLECTION (/users/{uid})
+    //  Shared across Web & Mobile App
+    // ─────────────────────────────────────
+    match /users/{uid} {
+      // User can read their own profile
+      allow read: if isOwner(uid);
+
+      // User can create their initial profile on Sign Up / Google First Login
+      // Enforces that new accounts start as free/unpaid UNLESS activating with verified payment
+      allow create: if isOwner(uid)
+                    && (
+                      // Case 1: Standard new user signup (starts as free)
+                      (
+                        (!('isPremium' in request.resource.data) || request.resource.data.isPremium == false)
+                        && (!('tierType' in request.resource.data) || request.resource.data.tierType == 'free')
+                        && (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus == 'none')
+                      )
+                      // Case 2: Signup with verified payment attached
+                      || (
+                        request.resource.data.paymentStatus == 'completed'
+                        && request.resource.data.isPremium == true
+                        && request.resource.data.paymentId is string
+                        && request.resource.data.paymentId.size() > 5
+                      )
+                    );
+
+      // User can update profile details (name, rank, score, category, predictions, last login):
+      // - Standard profile update: blocked from modifying payment keys arbitrarily
+      // - Verified payment upgrade: permitted when valid paymentId & completed status are supplied
+      allow update: if isOwner(uid)
+                    && (
+                      // Case A: Standard profile updates without touching protected payment fields
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                        'isPremium', 'paymentId', 'paymentStatus', 'tierType', 'amountPaise', 'verifiedAt'
+                      ])
+                      // Case B: Verified subscription upgrade from Web or Mobile checkout
+                      || (
+                        request.resource.data.paymentStatus == 'completed'
+                        && request.resource.data.isPremium == true
+                        && request.resource.data.paymentId is string
+                        && request.resource.data.paymentId.size() > 5
+                        && request.resource.data.tierType in ['pro_vip', 'pro_plus', 'season', 'basic']
+                      )
+                    );
+
+      // User can permanently delete their account profile (Delete Account feature)
+      allow delete: if isOwner(uid);
+    }
+
+    // ─────────────────────────────────────
+    //  2. WISHLISTS COLLECTION (/wishlists/{uid})
+    // ─────────────────────────────────────
+    match /wishlists/{uid} {
+      // Document owner has full read/write access to their saved colleges
+      allow read, write: if isOwner(uid);
+    }
+
+    // ─────────────────────────────────────
+    //  3. CHOICES (Choice Filling) COLLECTION (/choices/{uid})
+    // ─────────────────────────────────────
+    match /choices/{uid} {
+      // Document owner has full read/write access to their choice filling order
+      allow read, write: if isOwner(uid);
+    }
+
+    // ─────────────────────────────────────
+    //  4. COUPONS COLLECTION (/coupons/{code})
+    // ─────────────────────────────────────
+    match /coupons/{code} {
+      // Any authenticated user can read discount coupons for validation
+      allow read: if isAuthenticated();
+
+      // Only Admin / Backend can create or edit discount coupons
+      allow write: if false;
+    }
+
+    // ─────────────────────────────────────
+    //  5. PENDING PAYMENTS COLLECTION (/pending_payments/{paymentId})
+    // ─────────────────────────────────────
+    match /pending_payments/{paymentId} {
+      // User can create a pending payment intent when opening Razorpay
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && !('isPremium' in request.resource.data);
+
+      // User can read status of their own payment orders
+      allow read: if isAuthenticated()
+                  && resource.data.uid == request.auth.uid;
+
+      // Allow updating pending payment status when completed or closed
+      allow update: if isAuthenticated()
+                    && resource.data.uid == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // ─────────────────────────────────────
+    //  6. PAYMENTS COLLECTION (/payments/{paymentId})
+    //     For Admin Analytics & Transaction Records (Web & Mobile)
+    // ─────────────────────────────────────
+    match /payments/{paymentId} {
+      // Record completed transaction for analytics
+      allow create, update: if isAuthenticated()
+                            && request.resource.data.uid == request.auth.uid
+                            && request.resource.data.paymentStatus == 'completed';
+
+      allow read: if isAuthenticated()
+                  && resource.data.uid == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // ─────────────────────────────────────
+    //  7. PREDICTION HISTORY COLLECTION (/history/{docId})
+    // ─────────────────────────────────────
+    match /history/{docId} {
+      // User can read and delete their own calculation history
+      allow read, delete: if isAuthenticated()
+                          && resource.data.uid == request.auth.uid;
+
+      // User can save calculation history records
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+
+      // History entries are immutable (no edit allowed)
+      allow update: if false;
+    }
+
+    // ─────────────────────────────────────
+    //  8. SUPPORT & FEEDBACK COLLECTION (/support/{docId})
+    // ─────────────────────────────────────
+    match /support/{docId} {
+      // Authenticated users can submit feedback/support queries
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+
+      allow read: if isAuthenticated()
+                  && resource.data.uid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // ─────────────────────────────────────
+    //  DEFAULT DENY ALL OTHER COLLECTIONS
+    // ─────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

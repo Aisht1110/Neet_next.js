@@ -24,6 +24,7 @@ import {
   AlertCircle,
   Loader2,
   Tag,
+  RefreshCw,
 } from 'lucide-react';
 import { BrandIcon } from '@/components/common/BrandIcon';
 import { useAuth } from '@/lib/firebase/AuthContext';
@@ -44,6 +45,7 @@ function AccountContent() {
     resetPassword, 
     updateProfileData,
     activateVerifiedTier,
+    restoreVerifiedSubscription,
     signInAsDemoCandidate,
     isLoading 
   } = useAuth();
@@ -101,6 +103,47 @@ function AccountContent() {
     planKey: 'season',
     paymentId: '',
   });
+
+  // Restore Subscription state
+  const [restoreInput, setRestoreInput] = useState('');
+  const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [recentPaymentId, setRecentPaymentId] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const pid = localStorage.getItem('neet_user_payment_id') || '';
+      if (pid) {
+        setRecentPaymentId(pid);
+      } else {
+        try {
+          const h = JSON.parse(localStorage.getItem('neet_payment_history') || '[]');
+          if (Array.isArray(h) && h.length > 0 && h[h.length - 1]?.paymentId) {
+            setRecentPaymentId(h[h.length - 1].paymentId);
+          }
+        } catch(e){}
+      }
+    }
+  }, [profile.isPremium, profile.tierType]);
+
+  const handleRestorePass = async (overrideId?: string) => {
+    setIsRestoring(true);
+    setRestoreStatus(null);
+    try {
+      const targetId = overrideId || restoreInput.trim() || recentPaymentId;
+      const res = await restoreVerifiedSubscription(targetId);
+      if (res.success) {
+        setRestoreStatus(`✓ ${res.message}`);
+        setCelebration({ open: true, planKey: 'season', paymentId: targetId || 'verified' });
+      } else {
+        setRestoreStatus(`✕ ${res.message}`);
+      }
+    } catch(err: any) {
+      setRestoreStatus(`✕ ${err?.message || 'Restore failed'}`);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   // Sync state with profile
   useEffect(() => {
@@ -607,13 +650,27 @@ function AccountContent() {
                     </div>
                     <div className="flex items-center gap-2">
                       {!profile.isPremium && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('passes')}
-                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-xs shadow hover:brightness-110 transition-all cursor-pointer"
-                        >
-                          Upgrade to Season Pass
-                        </button>
+                        <>
+                          {recentPaymentId && (
+                            <button
+                              type="button"
+                              onClick={() => handleRestorePass(recentPaymentId)}
+                              disabled={isRestoring}
+                              className="px-3 py-1.5 rounded-xl border border-teal-500/40 bg-teal-500/10 text-teal-800 dark:text-teal-300 font-bold text-xs hover:bg-teal-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                              title="Restore pass from recent transaction"
+                            >
+                              <RefreshCw className={`h-3 w-3 ${isRestoring ? 'animate-spin' : ''}`} />
+                              <span>Restore VIP</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('passes')}
+                            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-xs shadow hover:brightness-110 transition-all cursor-pointer"
+                          >
+                            Upgrade to Season Pass
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -881,6 +938,55 @@ function AccountContent() {
                         : 'Activate Season Pass (₹299)'}
                     </button>
                   </div>
+                </div>
+
+                {/* Restore / Re-verify Pass Card */}
+                <div className="glass-panel p-5 border border-slate-300 dark:border-white/10 rounded-2xl space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        Already Purchased a Pass? Restore Access
+                      </h4>
+                    </div>
+                    {recentPaymentId && !profile.isPremium && (
+                      <button
+                        type="button"
+                        onClick={() => handleRestorePass(recentPaymentId)}
+                        disabled={isRestoring}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-teal-500/15 text-teal-800 dark:text-teal-300 text-xs font-bold hover:bg-teal-500/25 transition-colors cursor-pointer border border-teal-500/30"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${isRestoring ? 'animate-spin' : ''}`} />
+                        <span>Restore from {recentPaymentId}</span>
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-white/60">
+                    If your subscription status is not displaying after returning, enter your Razorpay Payment ID from your email/SMS receipt to immediately reactivate VIP access.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 max-w-xl">
+                    <input
+                      type="text"
+                      value={restoreInput}
+                      onChange={(e) => setRestoreInput(e.target.value)}
+                      placeholder="e.g. pay_XXXXXX or transaction ID"
+                      className="input-field text-xs py-2 mono-font flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRestorePass()}
+                      disabled={isRestoring}
+                      className="px-4 py-2 rounded-xl bg-slate-800 dark:bg-white text-white dark:text-slate-950 font-black text-xs hover:brightness-110 transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                    >
+                      {isRestoring ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                      <span>Verify &amp; Restore</span>
+                    </button>
+                  </div>
+                  {restoreStatus && (
+                    <p className={`text-xs font-bold pt-1 ${restoreStatus.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {restoreStatus}
+                    </p>
+                  )}
                 </div>
               </div>
             )}

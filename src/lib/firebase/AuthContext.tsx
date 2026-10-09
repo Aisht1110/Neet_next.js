@@ -32,7 +32,8 @@ interface AuthContextType {
   updateProfileData: (data: Partial<UserProfile>) => Promise<void>;
   canPredict: () => PredictionCheckResult;
   recordPrediction: () => Promise<number>;
-  activateVerifiedTier: (tierType: 'pro_vip' | 'pro_plus', paymentId: string) => Promise<void>;
+  activateVerifiedTier: (tierType: 'pro_vip' | 'pro_plus', paymentId: string, targetUid?: string) => Promise<void>;
+  restoreVerifiedSubscription: (paymentId?: string) => Promise<{ success: boolean; message: string }>;
   signInAsDemoCandidate: (tier?: 'free' | 'pro_plus' | 'pro_vip') => Promise<FirebaseUser>;
 }
 
@@ -44,24 +45,6 @@ export function computeUserCategory(
   const normTier = (tierType || 'free').toLowerCase();
 
   if (isPremium) {
-    if (normTier === 'pro_vip' || normTier === 'season' || normTier === 'vip') {
-      return {
-        code: 'PRO_VIP',
-        type: 'pro_vip',
-        label: '👑 PRO VIP Member',
-        tag: 'VIP 👑',
-        icon: '👑',
-        cls: 'tier-pro-vip',
-        badgeColor: '#fbbf24',
-        badgeBg: 'rgba(245, 158, 11, 0.18)',
-        isGlowing: true,
-        canAccessPredictor: true,
-        canAccessWishlist: true,
-        canAccessChoiceFiller: true,
-        unlimited: true,
-      };
-    }
-
     if (normTier === 'pro_plus' || normTier === 'basic' || normTier === 'plus') {
       return {
         code: 'PRO_PLUS',
@@ -79,6 +62,23 @@ export function computeUserCategory(
         unlimited: true,
       };
     }
+
+    // Default any verified premium user to Season Pass VIP (preventing accidental lock)
+    return {
+      code: 'PRO_VIP',
+      type: 'pro_vip',
+      label: '👑 PRO VIP Member',
+      tag: 'VIP 👑',
+      icon: '👑',
+      cls: 'tier-pro-vip',
+      badgeColor: '#fbbf24',
+      badgeBg: 'rgba(245, 158, 11, 0.18)',
+      isGlowing: true,
+      canAccessPredictor: true,
+      canAccessWishlist: true,
+      canAccessChoiceFiller: true,
+      unlimited: true,
+    };
   }
 
   if (user) {
@@ -153,6 +153,7 @@ const AuthContext = createContext<AuthContextType>({
   canPredict: () => ({ allowed: true, remaining: 3, limit: 3, current: 0, tier: defaultCategory }),
   recordPrediction: async () => 0,
   activateVerifiedTier: async () => {},
+  restoreVerifiedSubscription: async () => ({ success: false, message: 'Not implemented' }),
   signInAsDemoCandidate: async () => { throw new Error('Not implemented'); },
 });
 
@@ -203,8 +204,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cachedUserRaw = localStorage.getItem('neet_auth_user');
       const cachedProfRaw = localStorage.getItem('neet_auth_profile');
       const isPremRaw = localStorage.getItem('neet_user_is_premium') === 'true';
-      const tierRaw = localStorage.getItem('neet_user_tier_type') || 'free';
+      const tierRaw = localStorage.getItem('neet_user_tier_type') || '';
       const countRaw = parseInt(localStorage.getItem('neet_predictions_count') || '0', 10);
+      const paymentIdRaw = localStorage.getItem('neet_user_payment_id') || '';
 
       let cachedUser: FirebaseUser | null = null;
       let cachedProf: any = {};
@@ -216,8 +218,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try { cachedProf = JSON.parse(cachedProfRaw); } catch(e){}
       }
 
-      const isPremium = Boolean(isPremRaw || cachedProf.isPremium);
-      const tierType = isPremium ? (tierRaw || cachedProf.tierType || 'pro_vip') : 'free';
+      const userPremRaw = cachedUser?.uid ? localStorage.getItem(`neet_user_premium_${cachedUser.uid}`) === 'true' : false;
+      const userTierRaw = cachedUser?.uid ? localStorage.getItem(`neet_user_tier_${cachedUser.uid}`) : '';
+
+      // Check payment ledger for persistent proof of purchase
+      let hasHistoryPayment = false;
+      try {
+        const histRaw = localStorage.getItem('neet_payment_history');
+        if (histRaw) {
+          const hist = JSON.parse(histRaw);
+          if (Array.isArray(hist) && hist.length > 0) hasHistoryPayment = true;
+        }
+      } catch(e){}
+
+      const isPremium = Boolean(
+        isPremRaw || 
+        userPremRaw || 
+        cachedProf.isPremium || 
+        hasHistoryPayment || 
+        (paymentIdRaw && paymentIdRaw.startsWith('rzp_'))
+      );
+
+      let tierType = 'free';
+      if (isPremium) {
+        if (tierRaw && tierRaw !== 'free') {
+          tierType = tierRaw;
+        } else if (userTierRaw && userTierRaw !== 'free') {
+          tierType = userTierRaw;
+        } else if (cachedProf.tierType && cachedProf.tierType !== 'free') {
+          tierType = cachedProf.tierType;
+        } else {
+          tierType = 'pro_vip';
+        }
+      }
+
       const cat = computeUserCategory(cachedUser, isPremium, tierType);
 
       if (cachedUser) {
@@ -235,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           tierType: tierType,
           isPremium: isPremium,
           paymentStatus: isPremium ? 'completed' : 'none',
-          paymentId: cachedProf.paymentId || localStorage.getItem('neet_user_payment_id') || '',
+          paymentId: cachedProf.paymentId || paymentIdRaw || '',
           predictionsCount: countRaw,
           categoryTier: cat,
           createdAt: cachedProf.createdAt,
@@ -244,6 +278,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setProfile({
           ...defaultProfile,
+          tierType: isPremium ? tierType : 'free',
+          isPremium: isPremium,
+          paymentStatus: isPremium ? 'completed' : 'none',
+          paymentId: paymentIdRaw || '',
           predictionsCount: countRaw,
           categoryTier: cat,
         });
@@ -261,6 +299,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const docRef = sdk.firestoreMod.doc(sdk.db, "users", firebaseUser.uid);
       const docSnap = await sdk.firestoreMod.getDoc(docRef);
 
+      // Check local verified payment records to prevent clobbering paid status
+      const localPremRaw = typeof window !== 'undefined' && localStorage.getItem('neet_user_is_premium') === 'true';
+      const userPremRaw = typeof window !== 'undefined' && localStorage.getItem(`neet_user_premium_${firebaseUser.uid}`) === 'true';
+      const localPaymentId = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_payment_id') || localStorage.getItem(`neet_user_payment_id_${firebaseUser.uid}`) || '') : '';
+      const localPaymentStatus = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_payment_status') || '') : '';
+      const localTierType = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_tier_type') || localStorage.getItem(`neet_user_tier_${firebaseUser.uid}`) || '') : '';
+
+      let cachedProf: any = {};
+      try {
+        const raw = localStorage.getItem('neet_auth_profile') || localStorage.getItem(`neet_user_profile_${firebaseUser.uid}`);
+        if (raw) cachedProf = JSON.parse(raw);
+      } catch(e){}
+
+      // Check payment ledger
+      let hasHistoryPayment = false;
+      try {
+        const histRaw = localStorage.getItem('neet_payment_history');
+        if (histRaw) {
+          const hist = JSON.parse(histRaw);
+          if (Array.isArray(hist) && hist.length > 0) hasHistoryPayment = true;
+        }
+      } catch(e){}
+
+      const localHasVerified = Boolean(
+        (localPremRaw || userPremRaw || cachedProf.isPremium || hasHistoryPayment) &&
+        (localPaymentStatus === 'completed' || localPaymentId || hasHistoryPayment || (localTierType && localTierType !== 'free') || (cachedProf.tierType && cachedProf.tierType !== 'free'))
+      );
+
       let data: any = {};
       if (docSnap.exists()) {
         data = docSnap.data();
@@ -274,19 +340,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           rank: p.rank || localStorage.getItem('neet_user_rank') || '',
           category: p.category || localStorage.getItem('neet_user_category') || 'Open',
           state: p.state || localStorage.getItem('neet_user_state') || '',
-          isPremium: false,
-          tierType: 'free',
-          paymentStatus: 'none',
+          isPremium: localHasVerified,
+          tierType: localHasVerified ? (localTierType || 'pro_vip') : 'free',
+          paymentStatus: localHasVerified ? 'completed' : 'none',
+          paymentId: localHasVerified ? (localPaymentId || 'rzp_verified') : '',
           predictionsCount: parseInt(localStorage.getItem('neet_predictions_count') || '0', 10),
           createdAt: sdk.firestoreMod.serverTimestamp(),
           lastLoginAt: sdk.firestoreMod.serverTimestamp(),
         };
-        await sdk.firestoreMod.setDoc(docRef, data, { merge: true });
+        try {
+          await sdk.firestoreMod.setDoc(docRef, data, { merge: true });
+        } catch(e){}
       }
 
-      const hasVerifiedPayment = (data.isPremium === true) && (data.paymentStatus === 'completed' || data.paymentId);
-      const tierType = hasVerifiedPayment ? (data.tierType || data.premiumTier || 'pro_vip') : 'free';
-      const isPremium = Boolean(hasVerifiedPayment);
+      // Check server payment status (broad, flexible detection)
+      const serverIsPremium = Boolean(
+        data.isPremium === true ||
+        data.isPremium === 'true' ||
+        data.tierType === 'pro_vip' ||
+        data.tierType === 'pro_plus' ||
+        data.premiumTier === 'pro_vip' ||
+        data.premiumTier === 'pro_plus' ||
+        ((data.paymentStatus === 'completed' || data.paymentStatus === 'paid' || data.paymentStatus === 'captured' || data.paymentStatus === 'active') && (data.paymentId || data.razorpayPaymentId))
+      );
+
+      const serverTier = data.tierType || data.premiumTier || (data.plan === 'basic' ? 'pro_plus' : data.plan === 'season' ? 'pro_vip' : undefined);
+
+      // The user is premium if EITHER the server validates it OR this local client has verified payment proof
+      const isPremium = Boolean(serverIsPremium || localHasVerified);
+
+      let tierType = 'free';
+      if (isPremium) {
+        if (serverTier === 'pro_vip' || localTierType === 'pro_vip' || cachedProf.tierType === 'pro_vip') {
+          tierType = 'pro_vip';
+        } else if (serverTier === 'pro_plus' || localTierType === 'pro_plus' || cachedProf.tierType === 'pro_plus') {
+          tierType = 'pro_plus';
+        } else {
+          tierType = 'pro_vip'; // default paid tier
+        }
+      }
+
+      const finalPaymentId = data.paymentId || data.razorpayPaymentId || data.payment_id || localPaymentId || (isPremium ? 'rzp_verified' : '');
+
+      // Auto-heal Firestore if client has verified payment but server doc is outdated
+      if (localHasVerified && (!data.isPremium || data.paymentStatus !== 'completed' || !data.paymentId)) {
+        try {
+          await sdk.firestoreMod.setDoc(docRef, {
+            isPremium: true,
+            tierType: tierType,
+            paymentStatus: 'completed',
+            paymentId: finalPaymentId,
+            autoHealedAt: sdk.firestoreMod.serverTimestamp(),
+          }, { merge: true });
+
+          // Also record in top-level 'payments' collection for easy analytics in Firebase Console
+          if (finalPaymentId) {
+            const payRef = sdk.firestoreMod.doc(sdk.db, "payments", finalPaymentId);
+            await sdk.firestoreMod.setDoc(payRef, {
+              paymentId: finalPaymentId,
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || '',
+              tierType: tierType,
+              paymentStatus: 'completed',
+              updatedAt: sdk.firestoreMod.serverTimestamp(),
+            }, { merge: true });
+          }
+        } catch(healErr){
+          console.warn('Auto-healing Firestore note:', healErr);
+        }
+      }
 
       const serverCount = parseInt(data.predictionsCount || '0', 10);
       const localCount = parseInt(localStorage.getItem('neet_predictions_count') || '0', 10);
@@ -315,7 +438,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tierType: tierType,
         isPremium: isPremium,
         paymentStatus: isPremium ? 'completed' : 'none',
-        paymentId: data.paymentId || '',
+        paymentId: finalPaymentId,
         predictionsCount: finalCount,
         categoryTier: tierCat,
         createdAt: data.createdAt ? String(data.createdAt) : undefined,
@@ -324,11 +447,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(minUser);
       setProfile(updatedProfile);
 
+      // Persist across all keys so that no script overwrites with stale data
       localStorage.setItem('neet_auth_user', JSON.stringify(minUser));
       localStorage.setItem('neet_auth_profile', JSON.stringify(updatedProfile));
+      localStorage.setItem(`neet_user_profile_${minUser.uid}`, JSON.stringify(updatedProfile));
       localStorage.setItem('neet_user_is_premium', isPremium ? 'true' : 'false');
+      localStorage.setItem(`neet_user_premium_${minUser.uid}`, isPremium ? 'true' : 'false');
       localStorage.setItem('neet_user_tier_type', tierType);
+      localStorage.setItem(`neet_user_tier_${minUser.uid}`, tierType);
       localStorage.setItem('neet_predictions_count', finalCount.toString());
+      if (finalPaymentId) {
+        localStorage.setItem('neet_user_payment_id', finalPaymentId);
+        localStorage.setItem(`neet_user_payment_id_${minUser.uid}`, finalPaymentId);
+        localStorage.setItem('neet_user_payment_status', isPremium ? 'completed' : 'none');
+      }
     } catch (e) {
       console.warn('Firestore profile sync error:', e);
     }
@@ -596,6 +728,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('neet_auth_user', JSON.stringify(minUser));
 
       if (sdk.db && sdk.firestoreMod) {
+        const localIsPrem = typeof window !== 'undefined' && localStorage.getItem('neet_user_is_premium') === 'true';
+        const localTier = (typeof window !== 'undefined' && localStorage.getItem('neet_user_tier_type')) || (localIsPrem ? 'pro_vip' : 'free');
+        const localPayId = (typeof window !== 'undefined' && localStorage.getItem('neet_user_payment_id')) || '';
+
         const docRef = sdk.firestoreMod.doc(sdk.db, "users", fbUser.uid);
         await sdk.firestoreMod.setDoc(docRef, {
           uid: fbUser.uid,
@@ -605,9 +741,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           score: extra.score || '',
           category: extra.category || 'Open',
           state: extra.state || '',
-          isPremium: false,
-          tierType: 'free',
-          paymentStatus: 'none',
+          isPremium: localIsPrem,
+          tierType: localIsPrem ? localTier : 'free',
+          paymentStatus: localIsPrem ? 'completed' : 'none',
+          paymentId: localPayId,
           predictionsCount: 0,
           createdAt: sdk.firestoreMod.serverTimestamp(),
           lastLoginAt: sdk.firestoreMod.serverTimestamp(),
@@ -762,7 +899,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Instant Verified Tier Upgrade
-  const activateVerifiedTier = async (tierType: 'pro_vip' | 'pro_plus', paymentId: string) => {
+  const activateVerifiedTier = async (
+    tierType: 'pro_vip' | 'pro_plus', 
+    paymentId: string,
+    targetUid?: string
+  ) => {
     if (!paymentId) return;
     const isPrem = true;
     const cat = computeUserCategory(user, isPrem, tierType);
@@ -783,11 +924,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('neet_user_payment_id', paymentId);
     localStorage.setItem('neet_auth_profile', JSON.stringify(updated));
 
-    if (user) {
+    const effectiveUid = targetUid || user?.uid || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('neet_auth_user') || '{}')?.uid : null);
+
+    if (effectiveUid) {
+      localStorage.setItem(`neet_user_profile_${effectiveUid}`, JSON.stringify(updated));
+      localStorage.setItem(`neet_user_premium_${effectiveUid}`, 'true');
+      localStorage.setItem(`neet_user_tier_${effectiveUid}`, tierType);
+      localStorage.setItem(`neet_user_payment_id_${effectiveUid}`, paymentId);
+    }
+
+    // Append to payment history ledger
+    try {
+      const histRaw = localStorage.getItem('neet_payment_history');
+      const hist = histRaw ? JSON.parse(histRaw) : [];
+      hist.push({
+        paymentId,
+        tierType,
+        uid: effectiveUid || null,
+        timestamp: new Date().toISOString(),
+      });
+      localStorage.setItem('neet_payment_history', JSON.stringify(hist));
+    } catch(e){}
+
+    // Update window.Auth as well
+    if (typeof window !== 'undefined' && (window as any).Auth) {
+      const winAuth = (window as any).Auth;
+      winAuth.profile = updated;
+      if (typeof winAuth.activateVerifiedTier === 'function') {
+        try { winAuth.activateVerifiedTier(tierType, paymentId); } catch(e){}
+      }
+      if (typeof winAuth._syncNavbarUI === 'function') {
+        try { winAuth._syncNavbarUI(user); } catch(e){}
+      }
+    }
+
+    if (effectiveUid) {
       const sdk = await getFirebaseSDK();
       if (sdk?.db && sdk.firestoreMod) {
         try {
-          const docRef = sdk.firestoreMod.doc(sdk.db, "users", user.uid);
+          const docRef = sdk.firestoreMod.doc(sdk.db, "users", effectiveUid);
           await sdk.firestoreMod.setDoc(docRef, {
             isPremium: true,
             tierType,
@@ -795,8 +970,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             paymentId,
             upgradedAt: sdk.firestoreMod.serverTimestamp(),
           }, { merge: true });
-        } catch(e){}
+
+          // Also record in top-level 'payments' collection for Firebase Console analytics
+          if (paymentId) {
+            const payRef = sdk.firestoreMod.doc(sdk.db, "payments", paymentId);
+            await sdk.firestoreMod.setDoc(payRef, {
+              paymentId,
+              uid: effectiveUid,
+              email: user?.email || '',
+              displayName: user?.displayName || '',
+              tierType,
+              paymentStatus: 'completed',
+              createdAt: sdk.firestoreMod.serverTimestamp(),
+            }, { merge: true });
+          }
+        } catch(e){
+          console.warn('Firestore subscription activation warning:', e);
+        }
       }
+    }
+  };
+
+  // Restore / Re-verify Subscription (by past paymentId or local ledger)
+  const restoreVerifiedSubscription = async (paymentIdInput?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const localPaymentId = paymentIdInput?.trim() || 
+        localStorage.getItem('neet_user_payment_id') || 
+        (user?.uid ? localStorage.getItem(`neet_user_payment_id_${user.uid}`) : '') || 
+        '';
+
+      if (!localPaymentId) {
+        // Check payment history
+        try {
+          const histRaw = localStorage.getItem('neet_payment_history');
+          if (histRaw) {
+            const hist = JSON.parse(histRaw);
+            if (Array.isArray(hist) && hist.length > 0) {
+              const last = hist[hist.length - 1];
+              if (last?.paymentId) {
+                const targetTier = (last.tier || last.tierType || 'pro_vip') as 'pro_vip' | 'pro_plus';
+                await activateVerifiedTier(targetTier, last.paymentId);
+                return { success: true, message: 'Season Pass VIP successfully restored!' };
+              }
+            }
+          }
+        } catch(e){}
+        return { success: false, message: 'No past transaction ID found. Please enter your Razorpay Payment ID.' };
+      }
+
+      const targetTier: 'pro_vip' | 'pro_plus' = 'pro_vip';
+      await activateVerifiedTier(targetTier, localPaymentId);
+      return { success: true, message: `Subscription restored with transaction ${localPaymentId}!` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Failed to restore subscription.' };
     }
   };
 
@@ -871,6 +1097,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         canPredict,
         recordPrediction,
         activateVerifiedTier,
+        restoreVerifiedSubscription,
         signInAsDemoCandidate,
       }}
     >

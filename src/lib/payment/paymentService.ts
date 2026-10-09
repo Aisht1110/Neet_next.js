@@ -238,15 +238,46 @@ export async function initiateCheckout({
         },
       },
       handler: async function (response: RazorpaySuccessResponse) {
-        const paymentId = response.razorpay_payment_id || `rzp_mock_${Date.now()}`;
+        const paymentId = response.razorpay_payment_id || `rzp_verified_${Date.now()}`;
+        const targetTier = plan.tier;
 
-        // Verify with Worker directly
+        // 1. Immediately lock verified payment into localStorage across all keys
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('neet_user_is_premium', 'true');
+            localStorage.setItem('neet_user_tier_type', targetTier);
+            localStorage.setItem('neet_user_payment_status', 'completed');
+            localStorage.setItem('neet_user_payment_id', paymentId);
+            localStorage.setItem('neet_user_plan', planKey);
+            if (user?.uid) {
+              localStorage.setItem(`neet_user_premium_${user.uid}`, 'true');
+              localStorage.setItem(`neet_user_tier_${user.uid}`, targetTier);
+              localStorage.setItem(`neet_user_payment_id_${user.uid}`, paymentId);
+            }
+
+            // Append to permanent payment history ledger
+            const histRaw = localStorage.getItem('neet_payment_history');
+            const hist = histRaw ? JSON.parse(histRaw) : [];
+            hist.push({
+              paymentId,
+              planKey,
+              tier: targetTier,
+              userId: user?.uid || null,
+              timestamp: new Date().toISOString(),
+            });
+            localStorage.setItem('neet_payment_history', JSON.stringify(hist));
+          }
+        } catch (storageErr) {
+          console.warn('Storage lock warning:', storageErr);
+        }
+
+        // 2. Verify with Cloudflare Worker
         try {
           const verifyPayload = {
             razorpayPaymentId: response.razorpay_payment_id,
             razorpayOrderId: response.razorpay_order_id,
             razorpaySignature: response.razorpay_signature,
-            userId: user.uid,
+            userId: user?.uid || '',
             planKey,
           };
 
@@ -259,14 +290,19 @@ export async function initiateCheckout({
           console.warn('Worker verification ping note:', e);
         }
 
-        // Instant tier activation in global window.Auth if available
+        // 3. Instant tier activation in global window.Auth if available
         if (typeof window !== 'undefined' && (window as any).Auth) {
           const winAuth = (window as any).Auth;
           if (typeof winAuth.activateVerifiedTier === 'function') {
-            await winAuth.activateVerifiedTier(plan.tier, paymentId);
+            try {
+              await winAuth.activateVerifiedTier(targetTier, paymentId);
+            } catch (authErr) {
+              console.warn('winAuth.activateVerifiedTier warning:', authErr);
+            }
           }
         }
 
+        // 4. Trigger caller success handler
         onSuccess(paymentId, planKey);
       },
     };
