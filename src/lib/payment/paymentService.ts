@@ -113,21 +113,7 @@ export async function validateCoupon(code: string, planKey: 'basic' | 'season' =
 
   const clean = code.trim().toUpperCase();
 
-  // 1. Try first-party Next.js API route proxy first
-  try {
-    const res = await fetch('/api/validate-coupon', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: clean, planKey }),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    // try direct worker
-  }
-
-  // 2. Direct Cloudflare Worker fallback
+  // 1. Direct Cloudflare Worker validation
   try {
     const res = await fetch(`${WORKER_BASE_URL}/api/validate-coupon`, {
       method: 'POST',
@@ -198,12 +184,10 @@ export async function initiateCheckout({
     const Razorpay = await loadRazorpaySDK();
     if (!Razorpay) throw new Error('Razorpay Checkout SDK could not be initialized');
 
-    // Create order via first-party API route or direct Cloudflare Worker
+    // Create order via direct Cloudflare Worker
     let orderData: OrderDataResponse | null = null;
-    
-    // Attempt 1: Next.js API route proxy
     try {
-      const res = await fetch('/api/create-order', {
+      const res = await fetch(`${WORKER_BASE_URL}/api/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -215,26 +199,7 @@ export async function initiateCheckout({
       });
       if (res.ok) orderData = (await res.json()) as OrderDataResponse;
     } catch (e) {
-      // try direct worker
-    }
-
-    // Attempt 2: Direct Cloudflare Worker
-    if (!orderData?.orderId) {
-      try {
-        const res = await fetch(`${WORKER_BASE_URL}/api/create-order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            planKey,
-            userId: user.uid,
-            email: user.email || '',
-            couponCode: couponCode || '',
-          }),
-        });
-        if (res.ok) orderData = (await res.json()) as OrderDataResponse;
-      } catch (e) {
-        console.warn('Worker direct create-order fallback to client mode:', e);
-      }
+      console.warn('Worker direct create-order fallback to client mode:', e);
     }
 
     let finalAmountPaise = plan.amountPaise;
@@ -275,7 +240,7 @@ export async function initiateCheckout({
       handler: async function (response: RazorpaySuccessResponse) {
         const paymentId = response.razorpay_payment_id || `rzp_mock_${Date.now()}`;
 
-        // Verify with Worker (via API route or direct Worker)
+        // Verify with Worker directly
         try {
           const verifyPayload = {
             razorpayPaymentId: response.razorpay_payment_id,
@@ -285,20 +250,11 @@ export async function initiateCheckout({
             planKey,
           };
 
-          const verifyRes = await fetch('/api/verify-payment', {
+          await fetch(`${WORKER_BASE_URL}/api/verify-payment`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(verifyPayload),
           });
-
-          if (!verifyRes.ok) {
-            // direct worker fallback
-            await fetch(`${WORKER_BASE_URL}/api/verify-payment`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(verifyPayload),
-            });
-          }
         } catch (e) {
           console.warn('Worker verification ping note:', e);
         }
