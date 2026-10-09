@@ -28,10 +28,12 @@ import { BrandIcon } from '@/components/common/BrandIcon';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { initiateCheckout } from '@/lib/payment/paymentService';
 import { PaymentCelebrationModal } from '@/components/payment/PaymentCelebrationModal';
+import { ProCandidateDashboard } from '@/components/dashboard/ProCandidateDashboard';
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, activateVerifiedTier } = useAuth();
+  const { user, profile, tierCategory, activateVerifiedTier } = useAuth();
+  const [showPublicView, setShowPublicView] = useState(false);
   const [inputMode, setInputMode] = useState<'rank' | 'score'>('rank');
   const [rankValue, setRankValue] = useState<string>('12500');
   const [scoreValue, setScoreValue] = useState<string>('645');
@@ -44,6 +46,14 @@ export default function HomePage() {
     planKey: 'season',
     paymentId: '',
   });
+
+  const isPro = tierCategory.type === 'pro_vip' || tierCategory.type === 'pro_plus' || Boolean(profile?.isPremium);
+
+  if (isPro && !showPublicView) {
+    return (
+      <ProCandidateDashboard onSwitchToPublic={() => setShowPublicView(true)} />
+    );
+  }
 
   const handleCheckoutPlan = async (planKey: 'basic' | 'season') => {
     if (!user) {
@@ -197,6 +207,22 @@ export default function HomePage() {
 
   return (
     <div className="w-full relative overflow-x-hidden">
+      {/* VIP Return Banner for Pro Users Viewing Public Page */}
+      {isPro && showPublicView && (
+        <div className="sticky top-14 z-40 bg-gradient-to-r from-amber-500/20 via-teal-500/20 to-amber-500/20 border-b border-amber-500/30 backdrop-blur-md px-4 py-2.5 text-xs text-center flex flex-wrap items-center justify-center gap-3">
+          <span className="font-semibold text-white/90">
+            👁️ You are viewing the public visitor preview.
+          </span>
+          <button
+            onClick={() => setShowPublicView(false)}
+            className="px-3.5 py-1 rounded-full text-xs font-bold bg-amber-400 text-black hover:bg-amber-300 transition-all shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center gap-1.5"
+          >
+            <span>Return to VIP Command Center</span>
+            <span>👑</span>
+          </button>
+        </div>
+      )}
+
       {/* ── AMBIENT BACKGROUND GLOWS (Centrally balanced, no horizontal scroll) ── */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] overflow-hidden z-0">
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-b from-teal-500/15 via-emerald-500/5 to-transparent blur-3xl rounded-full" />
