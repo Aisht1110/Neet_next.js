@@ -366,22 +366,22 @@
 
 /* ── PRICING CARDS (High-Contrast 2-Card System) ── */
 .pricing-card-blue {
-  background: linear-gradient(145deg, #2563eb, #1d4ed8);
-  box-shadow: 0 18px 40px rgba(37, 99, 235, 0.35);
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(145deg, #09131d 0%, #0f1e2e 50%, #0a1622 100%);
+  box-shadow: 0 18px 45px rgba(20, 184, 166, 0.25);
+  border: 2px solid rgba(20, 184, 166, 0.35);
   border-radius: 28px;
 }
 .pricing-card-blue:hover {
-  box-shadow: 0 24px 50px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 24px 55px rgba(20, 184, 166, 0.35);
 }
 .pricing-card-purple {
-  background: linear-gradient(145deg, #9333ea, #7e22ce);
-  box-shadow: 0 18px 45px rgba(147, 51, 234, 0.4);
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: linear-gradient(145deg, #181308 0%, #241b0f 50%, #151109 100%);
+  box-shadow: 0 18px 50px rgba(245, 158, 11, 0.3);
+  border: 2px solid rgba(245, 158, 11, 0.5);
   border-radius: 28px;
 }
 .pricing-card-purple:hover {
-  box-shadow: 0 24px 55px rgba(147, 51, 234, 0.6);
+  box-shadow: 0 24px 60px rgba(245, 158, 11, 0.45);
 }
 .pricing-title-white {
   font-size: 1.35rem;
@@ -1634,27 +1634,27 @@ h1, h2, h3, h4, .font-heading {
    HIGH-CONTRAST PRICING CARDS (Matching index.html)
    ══════════════════════════════════════════════════════════════════════════ */
 .pricing-card-blue {
-  background: linear-gradient(145deg, #1e3a8a 0%, #1d4ed8 100%);
-  box-shadow: 0 18px 45px rgba(37, 99, 235, 0.35);
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(145deg, #09131d 0%, #0f1e2e 50%, #0a1622 100%);
+  box-shadow: 0 18px 45px rgba(20, 184, 166, 0.25);
+  border: 2px solid rgba(20, 184, 166, 0.35);
   border-radius: 28px;
   transition: transform 0.28s ease, box-shadow 0.28s ease;
 }
 .pricing-card-blue:hover {
   transform: translateY(-6px);
-  box-shadow: 0 24px 55px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 24px 55px rgba(20, 184, 166, 0.4);
 }
 
 .pricing-card-purple {
-  background: linear-gradient(145deg, #581c87 0%, #7e22ce 100%);
-  box-shadow: 0 18px 45px rgba(147, 51, 234, 0.4);
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: linear-gradient(145deg, #181308 0%, #241b0f 50%, #151109 100%);
+  box-shadow: 0 18px 50px rgba(245, 158, 11, 0.3);
+  border: 2px solid rgba(245, 158, 11, 0.5);
   border-radius: 28px;
   transition: transform 0.28s ease, box-shadow 0.28s ease;
 }
 .pricing-card-purple:hover {
   transform: translateY(-6px);
-  box-shadow: 0 24px 55px rgba(147, 51, 234, 0.6);
+  box-shadow: 0 24px 60px rgba(245, 158, 11, 0.45);
 }
 
 .card-top-ribbon {
@@ -1662,13 +1662,13 @@ h1, h2, h3, h4, .font-heading {
   top: -14px;
   left: 50%;
   transform: translateX(-50%);
-  background: #ffd93d;
-  color: #070710;
+  background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+  color: #060a12;
   font-size: 0.72rem;
   font-weight: 900;
-  padding: 0.35rem 1.1rem;
+  padding: 0.35rem 1.2rem;
   border-radius: 100px;
-  box-shadow: 0 4px 15px rgba(255, 217, 61, 0.5);
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   white-space: nowrap;

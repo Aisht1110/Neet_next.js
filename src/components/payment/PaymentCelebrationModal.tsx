@@ -83,7 +83,10 @@ export const PaymentCelebrationModal: React.FC<PaymentCelebrationModalProps> = (
         </h2>
 
         <p className="text-xs sm:text-sm text-white/70 leading-relaxed mb-6">
-          Your <strong>{plan.name}</strong> is now permanently activated! All AI predictors, choice ranking tools, and cutoff reports are fully unlocked.
+          {isVip
+            ? <>Your <strong>{plan.name}</strong> is now permanently activated! Unlimited AI predictions, Personal College Wishlist, Smart Choice Sequencer, and MCC PDF export are fully unlocked.</>
+            : <>Your <strong>{plan.name}</strong> is now permanently activated! Unlimited AI predictions, 750+ medical college cutoffs, all quota filters, and rural bond analytics are fully unlocked.</>
+          }
         </p>
 
         {/* Receipt Box */}
@@ -119,14 +122,24 @@ export const PaymentCelebrationModal: React.FC<PaymentCelebrationModalProps> = (
             <span>Run Predictor</span>
           </Link>
 
-          <Link
-            href="/choice-fill"
-            onClick={onClose}
-            className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-colors"
-          >
-            <ListOrdered className="h-4 w-4" />
-            <span>Choice Filling</span>
-          </Link>
+          {isVip ? (
+            <Link
+              href="/choice-fill"
+              onClick={onClose}
+              className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-colors"
+            >
+              <ListOrdered className="h-4 w-4" />
+              <span>Choice Filling</span>
+            </Link>
+          ) : (
+            <Link
+              href="/colleges"
+              onClick={onClose}
+              className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-colors"
+            >
+              <span>Explore Colleges</span>
+            </Link>
+          )}
         </div>
       </div>
     </div>,

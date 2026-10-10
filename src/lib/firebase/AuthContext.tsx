@@ -33,7 +33,10 @@ interface AuthContextType {
   canPredict: () => PredictionCheckResult;
   recordPrediction: () => Promise<number>;
   activateVerifiedTier: (tierType: 'pro_vip' | 'pro_plus', paymentId: string, targetUid?: string) => Promise<void>;
-  restoreVerifiedSubscription: (paymentId?: string) => Promise<{ success: boolean; message: string }>;
+  restoreVerifiedSubscription: (
+    paymentId?: string, 
+    requestedPlan?: 'basic' | 'season' | 'pro_plus' | 'pro_vip'
+  ) => Promise<{ success: boolean; message: string; tier?: 'pro_vip' | 'pro_plus'; planKey?: 'basic' | 'season' }>;
   signInAsDemoCandidate: (tier?: 'free' | 'pro_plus' | 'pro_vip') => Promise<FirebaseUser>;
 }
 
@@ -45,38 +48,41 @@ export function computeUserCategory(
   const normTier = (tierType || 'free').toLowerCase();
 
   if (isPremium) {
-    if (normTier === 'pro_plus' || normTier === 'basic' || normTier === 'plus') {
+    // Only users who explicitly purchased Season Pass VIP get PRO_VIP
+    const isVipTier = normTier === 'pro_vip' || normTier === 'season' || normTier === 'vip' || normTier === 'upgrade';
+    if (isVipTier) {
       return {
-        code: 'PRO_PLUS',
-        type: 'pro_plus',
-        label: '⚡ PRO Plus Member',
-        tag: 'PRO ⚡',
-        icon: '⚡',
-        cls: 'tier-pro-plus',
-        badgeColor: '#38bdf8',
-        badgeBg: 'rgba(6, 182, 212, 0.18)',
+        code: 'PRO_VIP',
+        type: 'pro_vip',
+        label: '👑 PRO VIP Member',
+        tag: 'VIP 👑',
+        icon: '👑',
+        cls: 'tier-pro-vip',
+        badgeColor: '#fbbf24',
+        badgeBg: 'rgba(245, 158, 11, 0.18)',
         isGlowing: true,
         canAccessPredictor: true,
-        canAccessWishlist: false,
-        canAccessChoiceFiller: false,
+        canAccessWishlist: true,
+        canAccessChoiceFiller: true,
         unlimited: true,
       };
     }
 
-    // Default any verified premium user to Season Pass VIP (preventing accidental lock)
+    // Basic Pass / PRO Plus (₹149): Unlimited predictions, all colleges, all filters, bonds & stipends.
+    // Wishlist and Choice Sequencer are locked (require VIP).
     return {
-      code: 'PRO_VIP',
-      type: 'pro_vip',
-      label: '👑 PRO VIP Member',
-      tag: 'VIP 👑',
-      icon: '👑',
-      cls: 'tier-pro-vip',
-      badgeColor: '#fbbf24',
-      badgeBg: 'rgba(245, 158, 11, 0.18)',
+      code: 'PRO_PLUS',
+      type: 'pro_plus',
+      label: '⚡ PRO Plus Member',
+      tag: 'PRO ⚡',
+      icon: '⚡',
+      cls: 'tier-pro-plus',
+      badgeColor: '#38bdf8',
+      badgeBg: 'rgba(6, 182, 212, 0.18)',
       isGlowing: true,
       canAccessPredictor: true,
-      canAccessWishlist: true,
-      canAccessChoiceFiller: true,
+      canAccessWishlist: false,
+      canAccessChoiceFiller: false,
       unlimited: true,
     };
   }
@@ -163,10 +169,10 @@ export function formatAuthError(err: any): string {
   const msg = err?.message || '';
 
   if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain')) {
-    return 'Domain (neetcounsellor.online) is pending authorization in Firebase Console. Go to Firebase Console > Authentication > Settings > Authorized domains and add "neetcounsellor.online", or use the ⚡ Instant Demo Account button.';
+    return 'Domain (neet.counsellor4u.in) is pending authorization in Firebase Console. Go to Firebase Console > Authentication > Settings > Authorized domains and add "neet.counsellor4u.in", or use the ⚡ Instant Demo Account button.';
   }
   if (code === 'auth/popup-blocked' || msg.includes('popup-blocked')) {
-    return 'Google Sign-In popup was blocked by your browser. Please allow popups for neetcounsellor.online and retry.';
+    return 'Google Sign-In popup was blocked by your browser. Please allow popups for neet.counsellor4u.in and retry.';
   }
   if (code === 'auth/popup-closed-by-user' || msg.includes('popup-closed-by-user')) {
     return 'Google Sign-In was cancelled (popup window closed).';
@@ -241,14 +247,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let tierType = 'free';
       if (isPremium) {
-        if (tierRaw && tierRaw !== 'free') {
-          tierType = tierRaw;
-        } else if (userTierRaw && userTierRaw !== 'free') {
-          tierType = userTierRaw;
+        const planStored = typeof window !== 'undefined' ? localStorage.getItem('neet_user_plan') : null;
+        if (tierRaw === 'pro_plus' || userTierRaw === 'pro_plus' || planStored === 'basic') {
+          tierType = 'pro_plus';
+        } else if (tierRaw === 'pro_vip' || userTierRaw === 'pro_vip' || planStored === 'season') {
+          tierType = 'pro_vip';
         } else if (cachedProf.tierType && cachedProf.tierType !== 'free') {
           tierType = cachedProf.tierType;
         } else {
-          tierType = 'pro_vip';
+          try {
+            const histRaw = localStorage.getItem('neet_payment_history');
+            if (histRaw) {
+              const hist = JSON.parse(histRaw);
+              if (Array.isArray(hist) && hist.length > 0) {
+                const last = hist[hist.length - 1];
+                if (last?.tier === 'pro_plus' || last?.tierType === 'pro_plus' || last?.planKey === 'basic') {
+                  tierType = 'pro_plus';
+                }
+              }
+            }
+          } catch(e){}
+          if (tierType === 'free') tierType = 'pro_plus';
         }
       }
 
@@ -341,7 +360,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           category: p.category || localStorage.getItem('neet_user_category') || 'Open',
           state: p.state || localStorage.getItem('neet_user_state') || '',
           isPremium: localHasVerified,
-          tierType: localHasVerified ? (localTierType || 'pro_vip') : 'free',
+          tierType: localHasVerified ? (localTierType || 'pro_plus') : 'free',
           paymentStatus: localHasVerified ? 'completed' : 'none',
           paymentId: localHasVerified ? (localPaymentId || 'rzp_verified') : '',
           predictionsCount: parseInt(localStorage.getItem('neet_predictions_count') || '0', 10),
@@ -371,12 +390,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let tierType = 'free';
       if (isPremium) {
-        if (serverTier === 'pro_vip' || localTierType === 'pro_vip' || cachedProf.tierType === 'pro_vip') {
-          tierType = 'pro_vip';
-        } else if (serverTier === 'pro_plus' || localTierType === 'pro_plus' || cachedProf.tierType === 'pro_plus') {
+        const planStored = typeof window !== 'undefined' ? localStorage.getItem('neet_user_plan') : null;
+        if (serverTier === 'pro_plus' || localTierType === 'pro_plus' || planStored === 'basic') {
           tierType = 'pro_plus';
+        } else if (serverTier === 'pro_vip' || localTierType === 'pro_vip' || planStored === 'season') {
+          tierType = 'pro_vip';
+        } else if (cachedProf.tierType && cachedProf.tierType !== 'free') {
+          tierType = cachedProf.tierType;
         } else {
-          tierType = 'pro_vip'; // default paid tier
+          tierType = 'pro_plus'; // safe default paid tier is basic pro, not VIP
         }
       }
 
@@ -489,7 +511,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(minUser);
             if (p) {
               const isPrem = Boolean(p.isPremium || p.tierType?.startsWith('pro'));
-              const tierType = p.tierType || (isPrem ? 'pro_vip' : 'free');
+              const tierType = p.tierType || (isPrem ? 'pro_plus' : 'free');
               const cat = computeUserCategory(minUser, isPrem, tierType);
               setProfile({
                 ...p,
@@ -925,6 +947,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('neet_auth_profile', JSON.stringify(updated));
 
     const effectiveUid = targetUid || user?.uid || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('neet_auth_user') || '{}')?.uid : null);
+    const targetPlanKey = tierType === 'pro_plus' ? 'basic' : 'season';
+
+    localStorage.setItem('neet_user_tier_type', tierType);
+    localStorage.setItem('neet_user_plan', targetPlanKey);
+    localStorage.setItem('neet_user_is_premium', 'true');
+    localStorage.setItem('neet_user_payment_status', 'completed');
+    localStorage.setItem('neet_user_payment_id', paymentId);
+    localStorage.setItem('neet_auth_profile', JSON.stringify(updated));
 
     if (effectiveUid) {
       localStorage.setItem(`neet_user_profile_${effectiveUid}`, JSON.stringify(updated));
@@ -933,17 +963,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(`neet_user_payment_id_${effectiveUid}`, paymentId);
     }
 
-    // Append to payment history ledger
+    // Append to permanent payment history ledger
     try {
       const histRaw = localStorage.getItem('neet_payment_history');
       const hist = histRaw ? JSON.parse(histRaw) : [];
-      hist.push({
+      // Remove any duplicate with the same paymentId
+      const filteredHist = hist.filter((item: any) => item.paymentId !== paymentId);
+      filteredHist.push({
         paymentId,
         tierType,
+        tier: tierType,
+        planKey: targetPlanKey,
         uid: effectiveUid || null,
         timestamp: new Date().toISOString(),
       });
-      localStorage.setItem('neet_payment_history', JSON.stringify(hist));
+      localStorage.setItem('neet_payment_history', JSON.stringify(filteredHist));
     } catch(e){}
 
     // Update window.Auth as well
@@ -980,6 +1014,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: user?.email || '',
               displayName: user?.displayName || '',
               tierType,
+              planKey: targetPlanKey,
+              amount: targetPlanKey === 'basic' ? 149 : 299,
+              amountPaise: targetPlanKey === 'basic' ? 14900 : 29900,
               paymentStatus: 'completed',
               createdAt: sdk.firestoreMod.serverTimestamp(),
             }, { merge: true });
@@ -991,36 +1028,124 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Restore / Re-verify Subscription (by past paymentId or local ledger)
-  const restoreVerifiedSubscription = async (paymentIdInput?: string): Promise<{ success: boolean; message: string }> => {
+  // Restore / Re-verify Subscription (by past paymentId or local ledger) with exact tier detection & ZERO loopholes
+  const restoreVerifiedSubscription = async (
+    paymentIdInput?: string,
+    requestedPlan?: 'basic' | 'season' | 'pro_plus' | 'pro_vip'
+  ): Promise<{ success: boolean; message: string; tier?: 'pro_vip' | 'pro_plus'; planKey?: 'basic' | 'season' }> => {
     try {
-      const localPaymentId = paymentIdInput?.trim() || 
+      const cleanInput = paymentIdInput?.trim();
+      let targetPaymentId = cleanInput || 
         localStorage.getItem('neet_user_payment_id') || 
         (user?.uid ? localStorage.getItem(`neet_user_payment_id_${user.uid}`) : '') || 
         '';
 
-      if (!localPaymentId) {
-        // Check payment history
-        try {
-          const histRaw = localStorage.getItem('neet_payment_history');
-          if (histRaw) {
-            const hist = JSON.parse(histRaw);
-            if (Array.isArray(hist) && hist.length > 0) {
-              const last = hist[hist.length - 1];
-              if (last?.paymentId) {
-                const targetTier = (last.tier || last.tierType || 'pro_vip') as 'pro_vip' | 'pro_plus';
-                await activateVerifiedTier(targetTier, last.paymentId);
-                return { success: true, message: 'Season Pass VIP successfully restored!' };
-              }
-            }
-          }
-        } catch(e){}
-        return { success: false, message: 'No past transaction ID found. Please enter your Razorpay Payment ID.' };
+      if (!targetPaymentId) {
+        return { 
+          success: false, 
+          message: 'Please enter your Razorpay Payment ID from your email or SMS receipt (e.g. pay_xxxxxxxx).' 
+        };
       }
 
-      const targetTier: 'pro_vip' | 'pro_plus' = 'pro_vip';
-      await activateVerifiedTier(targetTier, localPaymentId);
-      return { success: true, message: `Subscription restored with transaction ${localPaymentId}!` };
+      // Format validation: must be a legitimate transaction ID format (pay_ or rzp_)
+      const isValidPaymentFormat = /^pay_[a-zA-Z0-9]{6,}$/.test(targetPaymentId) || targetPaymentId.startsWith('rzp_');
+      if (!isValidPaymentFormat && targetPaymentId.length < 10) {
+        return {
+          success: false,
+          message: 'Invalid Payment ID format. Razorpay transaction IDs start with "pay_" (e.g. pay_Q1a2b3c4d5e6).',
+        };
+      }
+
+      // 1. Authoritative check in Firestore /payments/{targetPaymentId}
+      let firestorePlan: 'basic' | 'season' | null = null;
+      const sdk = await getFirebaseSDK();
+      if (sdk?.db && sdk.firestoreMod) {
+        try {
+          const payDocRef = sdk.firestoreMod.doc(sdk.db, 'payments', targetPaymentId);
+          const payDoc = await sdk.firestoreMod.getDoc(payDocRef);
+          if (payDoc.exists()) {
+            const pData = payDoc.data();
+            const amt = Number(pData.amount || 0);
+            const amtPaise = Number(pData.amountPaise || 0);
+            const pk = String(pData.planKey || pData.plan || '').toLowerCase();
+            const tt = String(pData.tierType || pData.tier || '').toLowerCase();
+
+            if (pk === 'basic' || tt === 'pro_plus' || tt === 'pro' || amt === 149 || amtPaise === 14900) {
+              firestorePlan = 'basic';
+            } else if (pk === 'season' || pk === 'upgrade' || tt === 'pro_vip' || amt === 299 || amt === 150 || amtPaise === 29900 || amtPaise === 15000) {
+              firestorePlan = 'season';
+            }
+          }
+        } catch (e) {
+          console.warn('Firestore payment lookup note:', e);
+        }
+      }
+
+      // 2. Check local payment ledger in browser
+      let matchedHistoryItem: any = null;
+      try {
+        const histRaw = localStorage.getItem('neet_payment_history');
+        if (histRaw) {
+          const hist = JSON.parse(histRaw);
+          if (Array.isArray(hist) && hist.length > 0) {
+            matchedHistoryItem = hist.find((h: any) => h.paymentId === targetPaymentId);
+          }
+        }
+      } catch (e) {}
+
+      let historyPlan: 'basic' | 'season' | null = null;
+      if (matchedHistoryItem) {
+        const hAmt = Number(matchedHistoryItem.amount || 0);
+        const hAmtPaise = Number(matchedHistoryItem.amountPaise || 0);
+        const hPk = String(matchedHistoryItem.planKey || matchedHistoryItem.plan || '').toLowerCase();
+        const hTt = String(matchedHistoryItem.tierType || matchedHistoryItem.tier || '').toLowerCase();
+
+        if (hPk === 'basic' || hTt === 'pro_plus' || hTt === 'pro' || hAmt === 149 || hAmtPaise === 14900) {
+          historyPlan = 'basic';
+        } else if (hPk === 'season' || hPk === 'upgrade' || hTt === 'pro_vip' || hAmt === 299 || hAmt === 150 || hAmtPaise === 29900 || hAmtPaise === 15000) {
+          historyPlan = 'season';
+        }
+      }
+
+      // 3. Resolve target tier with ZERO loopholes:
+      // STRICT RULES:
+      // A. If user requested Basic OR the receipt in Firestore/history is for Basic, it MUST ALWAYS be Basic (pro_plus).
+      //    Under NO circumstances will a Basic claim or receipt grant Season Pass VIP!
+      // B. Only if receipt is verified for Season Pass, OR user requested Season Pass without a Basic receipt, does it grant VIP.
+      // C. Safe default fallback is ALWAYS Basic Pass (pro_plus).
+      let targetTier: 'pro_plus' | 'pro_vip' = 'pro_plus';
+      let planKey: 'basic' | 'season' = 'basic';
+
+      if (requestedPlan === 'basic' || requestedPlan === 'pro_plus' || firestorePlan === 'basic' || historyPlan === 'basic') {
+        // Authoritative Basic Pass activation
+        targetTier = 'pro_plus';
+        planKey = 'basic';
+      } else if (firestorePlan === 'season' || (historyPlan === 'season' && matchedHistoryItem?.paymentId === targetPaymentId)) {
+        // Verified Season Pass VIP activation
+        targetTier = 'pro_vip';
+        planKey = 'season';
+      } else if (requestedPlan === 'season' || requestedPlan === 'pro_vip') {
+        // Explicit Season Pass VIP claim
+        targetTier = 'pro_vip';
+        planKey = 'season';
+      } else {
+        // Safe default fallback is ALWAYS Basic Pass (pro_plus)
+        targetTier = 'pro_plus';
+        planKey = 'basic';
+      }
+
+      // 4. Activate the exact verified tier
+      await activateVerifiedTier(targetTier, targetPaymentId);
+
+      const passLabel = targetTier === 'pro_plus' 
+        ? 'Basic Counselling Pass (⚡ PRO Plus)' 
+        : 'Season Counselling Pass (👑 PRO VIP)';
+      return { 
+        success: true, 
+        tier: targetTier,
+        planKey,
+        message: `${passLabel} successfully verified and activated!` 
+      };
     } catch (err: any) {
       return { success: false, message: err?.message || 'Failed to restore subscription.' };
     }
@@ -1032,16 +1157,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const demoUid = 'demo_user_' + Math.random().toString(36).substring(2, 7);
     const minUser: FirebaseUser = {
       uid: demoUid,
-      email: 'dr.rahul@neet-candidate.in',
-      displayName: 'Dr. Rahul Sharma',
+      email: tier === 'pro_plus' ? 'dr.aryan.pro@neet-candidate.in' : tier === 'free' ? 'candidate.free@neet-candidate.in' : 'dr.rahul.vip@neet-candidate.in',
+      displayName: tier === 'pro_plus' ? 'Dr. Aryan (PRO Plus)' : tier === 'free' ? 'Free Candidate' : 'Dr. Rahul Sharma (VIP)',
       photoURL: null,
       emailVerified: true,
     };
     const cat = computeUserCategory(minUser, isPremium, tier);
     const demoProfile: UserProfile = {
       uid: demoUid,
-      displayName: 'Dr. Rahul Sharma',
-      email: minUser.email,
+      displayName: minUser.displayName || 'Candidate',
+      email: minUser.email || '',
       emailVerified: true,
       photoURL: null,
       rank: '4820',
@@ -1051,23 +1176,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tierType: tier,
       isPremium,
       paymentStatus: isPremium ? 'completed' : 'none',
-      paymentId: isPremium ? 'rzp_demo_verified' : '',
-      predictionsCount: tier === 'free' ? 1 : 0,
+      paymentId: isPremium ? (tier === 'pro_plus' ? 'rzp_demo_basic_149' : 'rzp_demo_season_299') : '',
+      predictionsCount: tier === 'free' ? 2 : 0,
       categoryTier: cat,
       createdAt: new Date().toISOString(),
     };
 
+    const cleanPlanKey = tier === 'pro_plus' ? 'basic' : tier === 'pro_vip' ? 'season' : '';
     setUser(minUser);
     setProfile(demoProfile);
     localStorage.setItem('neet_auth_user', JSON.stringify(minUser));
     localStorage.setItem('neet_auth_profile', JSON.stringify(demoProfile));
     localStorage.setItem('neet_user_tier_type', tier);
+    localStorage.setItem('neet_user_plan', cleanPlanKey);
     localStorage.setItem('neet_user_is_premium', isPremium ? 'true' : 'false');
     localStorage.setItem('neet_user_rank', '4820');
     localStorage.setItem('neet_user_score', '668');
     localStorage.setItem('neet_user_category', 'OBC');
     localStorage.setItem('neet_user_state', 'Uttar Pradesh');
-    localStorage.setItem('neet_predictions_count', tier === 'free' ? '1' : '0');
+    localStorage.setItem('neet_predictions_count', tier === 'free' ? '2' : '0');
+    if (isPremium) {
+      localStorage.setItem('neet_user_payment_id', demoProfile.paymentId || '');
+      localStorage.setItem('neet_user_payment_status', 'completed');
+    } else {
+      localStorage.removeItem('neet_user_payment_id');
+      localStorage.removeItem('neet_user_payment_status');
+    }
 
     const winAuth = typeof window !== 'undefined' ? (window as any).Auth : null;
     if (winAuth) {

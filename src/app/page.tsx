@@ -22,6 +22,7 @@ import {
   ChevronUp,
   Gift,
   CheckCircle2,
+  Zap,
 } from 'lucide-react';
 import { scoreToRank } from '@/lib/engine/scoreToRank';
 import { BrandIcon } from '@/components/common/BrandIcon';
@@ -69,6 +70,22 @@ export default function HomePage() {
         const tier = planKey === 'season' ? 'pro_vip' : 'pro_plus';
         await activateVerifiedTier(tier, paymentId);
         setCelebration({ open: true, planKey, paymentId });
+      },
+    });
+  };
+
+  const handleUpgradeToSeason = async () => {
+    if (!user) {
+      router.push('/account?plan=upgrade');
+      return;
+    }
+    await initiateCheckout({
+      planKey: 'upgrade',
+      couponCode: '',
+      user,
+      onSuccess: async (paymentId) => {
+        await activateVerifiedTier('pro_vip', paymentId);
+        setCelebration({ open: true, planKey: 'upgrade', paymentId });
       },
     });
   };
@@ -209,16 +226,19 @@ export default function HomePage() {
     <div className="w-full relative overflow-x-hidden">
       {/* VIP Return Banner for Pro Users Viewing Public Page */}
       {isPro && showPublicView && (
-        <div className="sticky top-14 z-40 bg-gradient-to-r from-amber-500/20 via-teal-500/20 to-amber-500/20 border-b border-amber-500/30 backdrop-blur-md px-4 py-2.5 text-xs text-center flex flex-wrap items-center justify-center gap-3">
-          <span className="font-semibold text-white/90">
-            👁️ You are viewing the public visitor preview.
-          </span>
+        <div className="sticky top-14 z-40 bg-gradient-to-r from-teal-900/90 via-slate-900/95 to-amber-900/90 text-white border-b border-teal-500/30 backdrop-blur-md px-4 py-2.5 text-xs text-center flex flex-wrap items-center justify-center gap-3 shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold text-white">
+              Active Candidate Session: <strong>Dr. {profile?.displayName || user?.displayName || 'Aspirant'}</strong> ({tierCategory.label})
+            </span>
+          </div>
           <button
             onClick={() => setShowPublicView(false)}
-            className="px-3.5 py-1 rounded-full text-xs font-bold bg-amber-400 text-black hover:bg-amber-300 transition-all shadow-[0_0_15px_rgba(251,191,36,0.3)] flex items-center gap-1.5"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 transition-all shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer"
           >
-            <span>Return to VIP Command Center</span>
-            <span>👑</span>
+            <span>Return to Candidate Cockpit</span>
+            <ArrowRight className="w-3.5 h-3.5 text-slate-950" />
           </button>
         </div>
       )}
@@ -642,98 +662,233 @@ export default function HomePage() {
       <section className="relative z-10 py-16 sm:py-24 border-y border-slate-200 dark:border-white/8 bg-slate-50/50 dark:bg-white/[0.015]">
         <div className="container-custom">
           <div className="text-center mb-12">
-            <div className="inline-block text-xs font-extrabold text-purple-700 dark:text-purple-300 uppercase tracking-widest mb-3 px-4 py-1.5 rounded-full bg-purple-500/10 dark:bg-purple-400/10 border border-purple-500/30 dark:border-purple-400/25">
-              Transparent Counselling Plans
+            <div className="inline-block text-xs font-black text-teal-800 dark:text-teal-300 uppercase tracking-widest mb-3 px-4 py-1.5 rounded-full bg-teal-500/10 dark:bg-teal-400/10 border border-teal-500/30 dark:border-teal-400/25">
+              Transparent Medical Counselling Plans
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-950 dark:text-white tracking-tight mb-3 font-heading">
               Choose Your Counselling Plan
             </h2>
             <p className="text-slate-600 dark:text-white/60 text-sm sm:text-base max-w-xl mx-auto">
-              Pay once. Use throughout all rounds of NEET counselling until seat confirmation.
+              Pay once. Use throughout all rounds of NEET UG counselling until final seat confirmation.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto items-stretch">
-            {/* Card 1: Basic Pass (Electric Blue) */}
-            <div className="pricing-card-blue p-8 sm:p-10 flex flex-col justify-between relative text-white">
+            {/* Card 1: Basic Pass */}
+            <div className="relative p-8 sm:p-10 rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 border border-teal-500/35 text-white shadow-xl hover:shadow-[0_20px_45px_rgba(20,184,166,0.2)] hover:border-teal-400/50 transition-all duration-300 flex flex-col justify-between group">
               <div>
-                <div className="pricing-title-white">Basic Pass</div>
-                <div className="pricing-price-white"><span>₹</span>149</div>
-                <div className="pricing-orig-white">₹299 regular price</div>
-                <div className="pricing-divider-white" />
-                <ul className="pricing-list-white">
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-white shrink-0" /> Full predictor — 750+ Medical Colleges</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-white shrink-0" /> AIQ (15%) &amp; Deemed Cutoff Data</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-white shrink-0" /> Wishlist — save &amp; track institutions</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-white shrink-0" /> Round 1 &amp; Round 2 Cutoff Trends</li>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="text-xs font-black tracking-wider uppercase text-teal-400 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Essential Tier</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                    50% OFF TODAY
+                  </span>
+                </div>
+
+                <h3 className="text-2xl font-black text-white tracking-tight">Basic Pass</h3>
+                <p className="text-xs text-white/60 mt-1 mb-5">
+                  Designed for candidates seeking instant AIQ and Deemed cutoff forecasts.
+                </p>
+
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="text-4xl sm:text-5xl font-black text-white font-mono">₹149</span>
+                  <span className="text-sm text-white/40 line-through font-mono">₹299</span>
+                  <span className="text-xs font-bold text-teal-400 ml-1">One-time payment</span>
+                </div>
+
+                <div className="w-full h-px bg-white/10 my-6" />
+
+                <ul className="space-y-3.5 text-xs sm:text-sm text-white/85">
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span>Full AI Predictor — 750+ Medical &amp; Dental Colleges</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span>15% AIQ &amp; Deemed University Cutoff Datasets</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span>Candidate Wishlist — save &amp; categorize institutions</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span>Round 1 &amp; Round 2 Cutoff Trends Analysis</span>
+                  </li>
                 </ul>
               </div>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => handleCheckoutPlan('basic')}
-                  className="pricing-btn-pill-white btn-blue-text cursor-pointer"
-                >
-                  Select Basic — ₹149
-                </button>
-                <p className="text-[11px] text-white/70 text-center mt-3 flex items-center justify-center gap-1">
-                  <Lock className="h-3 w-3" /> Instant Access · Razorpay Verified
+
+              <div className="mt-8 pt-4">
+                {tierCategory.type === 'pro_plus' ? (
+                  <div className="w-full py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-center flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Active Plan · Basic Pass Unlocked</span>
+                  </div>
+                ) : tierCategory.type === 'pro_vip' ? (
+                  <div className="w-full py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-white/10 border border-white/20 text-white/80 text-center flex items-center justify-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    <span>Included in Your Active VIP Pass</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleCheckoutPlan('basic')}
+                    className="w-full py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 text-slate-950 transition-all shadow-lg shadow-teal-500/25 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>Select Basic Pass — ₹149</span>
+                    <ArrowRight className="w-4 h-4 text-slate-950" />
+                  </button>
+                )}
+                <p className="text-[11px] text-white/60 text-center mt-3 flex items-center justify-center gap-1.5 font-medium">
+                  <Lock className="h-3 w-3 text-teal-400" /> Instant Access · Razorpay 256-bit Secure
                 </p>
               </div>
             </div>
 
-            {/* Card 2: Season Pass VIP (Royal Purple) */}
-            <div className="pricing-card-purple p-8 sm:p-10 flex flex-col justify-between relative text-white">
-              <div className="card-top-ribbon">⭐ Most Popular · Best Value</div>
-              <div>
-                <div className="pricing-title-white flex items-center justify-center gap-2">
-                  <Crown className="h-5 w-5 text-amber-300" />
-                  <span>Season Pass VIP</span>
-                </div>
-                <div className="pricing-price-white">
-                  <span>₹</span>{discountApplied ? '249' : '299'}
-                </div>
-                <div className="pricing-orig-white">
-                  ₹599 regular price {discountApplied && <span className="text-amber-300 font-bold ml-2">(₹50 Promo Applied)</span>}
-                </div>
-                <div className="pricing-divider-white" />
-                <ul className="pricing-list-white">
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-amber-300 shrink-0" /> Unlimited AI Predictions (All 4 Rounds + Stray)</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-amber-300 shrink-0" /> 15% AIQ + 85% State Quota Deep Data (36 States)</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-amber-300 shrink-0" /> Smart Drag-and-Drop Choice Filling Matrix</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-amber-300 shrink-0" /> Export Choice Order to Formatted PDF</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-amber-300 shrink-0" /> State Rural Service Bond &amp; Penalty Calculator</li>
-                  <li className="pricing-item-white"><Check className="h-4 w-4 text-amber-300 shrink-0" /> 24/7 Priority Helpdesk Support</li>
-                </ul>
+            {/* Card 2: Season Pass VIP */}
+            <div className="relative p-8 sm:p-10 rounded-3xl bg-gradient-to-b from-slate-900 via-[#181308] to-slate-950 border-2 border-amber-500/50 text-white shadow-2xl hover:shadow-[0_20px_50px_rgba(245,158,11,0.25)] hover:border-amber-400 transition-all duration-300 flex flex-col justify-between group">
+              {/* Floating Top Ribbon */}
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 text-[11px] font-black uppercase tracking-wider py-1 px-4 rounded-full shadow-lg shadow-amber-500/30 flex items-center gap-1.5 whitespace-nowrap">
+                <span>⭐</span>
+                <span>Most Popular · Recommended for All 4 Rounds</span>
               </div>
 
               <div>
-                {/* Coupon Code Box */}
-                <form onSubmit={handleApplyCoupon} className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    placeholder="PROMO CODE (e.g. NEET50)"
-                    className="w-full px-3 py-2 rounded-xl bg-white/15 border border-white/25 text-white text-xs font-bold placeholder:text-white/50 focus:outline-none focus:border-white"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-black shrink-0 hover:bg-amber-300 transition-all cursor-pointer"
-                  >
-                    Apply
-                  </button>
-                </form>
+                <div className="flex items-center justify-between gap-2 mb-3 mt-1">
+                  <div className="text-xs font-black tracking-wider uppercase text-amber-400 flex items-center gap-1.5">
+                    <Crown className="w-4 h-4 text-amber-300" />
+                    <span>Complete VIP Package</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    SAVE ₹300
+                  </span>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleCheckoutPlan('season')}
-                  className="pricing-btn-pill-white btn-purple-text cursor-pointer"
-                >
-                  Get VIP Pass — ₹{discountApplied ? '249' : '299'}
-                </button>
-                <p className="text-[11px] text-white/70 text-center mt-3 flex items-center justify-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-amber-300" /> UPI · Cards · NetBanking · 100% Secure
+                <h3 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                  <span>Season Pass 2026 VIP</span>
+                  <Crown className="w-5 h-5 text-amber-400 inline" />
+                </h3>
+                <p className="text-xs text-white/65 mt-1 mb-5">
+                  Complete counselling authority covering 85% State Quota, Choice Sequencer, and Stray vacancy.
+                </p>
+
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="text-4xl sm:text-5xl font-black text-amber-300 font-mono">
+                    ₹{discountApplied ? '249' : '299'}
+                  </span>
+                  <span className="text-sm text-white/40 line-through font-mono">₹599</span>
+                  {discountApplied && (
+                    <span className="text-xs font-bold text-amber-400 ml-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
+                      ₹50 Coupon Applied
+                    </span>
+                  )}
+                </div>
+
+                <div className="w-full h-px bg-white/10 my-6" />
+
+                <ul className="space-y-3.5 text-xs sm:text-sm text-white/90">
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span><strong>Unlimited AI Predictions</strong> across All 4 Rounds + Stray Vacancy</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span><strong>15% AIQ + 85% State Quota</strong> Deep Data across 36 States &amp; UTs</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span><strong>Smart Choice Filling Matrix</strong> — algorithm-sorted priority list</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span><strong>Export Final Choice Order</strong> to clean formatted PDF</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span><strong>State Rural Service Bond &amp; Penalty</strong> calculator</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3" />
+                    </div>
+                    <span><strong>24/7 Priority Helpdesk</strong> assistance through admission day</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="mt-8 pt-4">
+                {/* Coupon Code Box */}
+                {!discountApplied && (
+                  <form onSubmit={handleApplyCoupon} className="flex gap-2 mb-3.5">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      placeholder="PROMO CODE (e.g. NEET50)"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold placeholder:text-white/40 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 transition-all cursor-pointer shadow-sm"
+                    >
+                      Apply
+                    </button>
+                  </form>
+                )}
+
+                {tierCategory.type === 'pro_vip' ? (
+                  <Link
+                    href="/predict"
+                    className="w-full py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 text-center flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
+                  >
+                    <Crown className="w-4 h-4 text-slate-950" />
+                    <span>You are a VIP Member · Launch Predictor</span>
+                    <ArrowRight className="w-4 h-4 text-slate-950" />
+                  </Link>
+                ) : tierCategory.type === 'pro_plus' ? (
+                  <button
+                    type="button"
+                    onClick={handleUpgradeToSeason}
+                    className="w-full py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 transition-all shadow-xl shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Crown className="w-4 h-4 text-slate-950" />
+                    <span>Upgrade to VIP for ₹150 (Pay Difference)</span>
+                    <ArrowRight className="w-4 h-4 text-slate-950" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleCheckoutPlan('season')}
+                    className="w-full py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 transition-all shadow-xl shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Crown className="w-4 h-4 text-slate-950" />
+                    <span>Get Season Pass VIP — ₹{discountApplied ? '249' : '299'}</span>
+                    <ArrowRight className="w-4 h-4 text-slate-950" />
+                  </button>
+                )}
+
+                <p className="text-[11px] text-white/60 text-center mt-3 flex items-center justify-center gap-1.5 font-medium">
+                  <ShieldCheck className="h-3.5 w-3.5 text-amber-400" /> UPI · Cards · NetBanking · 100% Secure
                 </p>
               </div>
             </div>

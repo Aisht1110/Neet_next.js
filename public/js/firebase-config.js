@@ -276,7 +276,7 @@
             category: localCache.category || 'Open',
             state: localCache.state || '',
             isPremium: localHasVerified,
-            tierType: localHasVerified ? (localTierType || 'pro_vip') : 'free',
+            tierType: localHasVerified ? (localTierType || 'pro_plus') : 'free',
             paymentStatus: localHasVerified ? 'completed' : 'none',
             paymentId: localHasVerified ? (localPaymentId || 'rzp_verified') : '',
             predictionsCount: parseInt(localStorage.getItem('neet_predictions_count') || '0', 10),
@@ -310,12 +310,15 @@
 
         let tierType = 'free';
         if (isPremium) {
-          if (serverTier === 'pro_vip' || localTierType === 'pro_vip' || cachedProf.tierType === 'pro_vip') {
-            tierType = 'pro_vip';
-          } else if (serverTier === 'pro_plus' || localTierType === 'pro_plus' || cachedProf.tierType === 'pro_plus') {
+          const planStored = localStorage.getItem('neet_user_plan');
+          if (serverTier === 'pro_plus' || localTierType === 'pro_plus' || planStored === 'basic') {
             tierType = 'pro_plus';
-          } else {
+          } else if (serverTier === 'pro_vip' || localTierType === 'pro_vip' || planStored === 'season') {
             tierType = 'pro_vip';
+          } else if (cachedProf.tierType && cachedProf.tierType !== 'free') {
+            tierType = cachedProf.tierType;
+          } else {
+            tierType = 'pro_plus';
           }
         }
 
@@ -412,7 +415,7 @@
         } else if (prof.tierType && prof.tierType !== 'free') {
           tierType = prof.tierType;
         } else {
-          tierType = 'pro_vip';
+          tierType = 'pro_plus';
         }
       }
 
@@ -452,38 +455,39 @@
 
       // Only grant Pro if actually paid & verified
       if (isPremium) {
-        if (tierType === 'pro_plus' || tierType === 'basic' || tierType === 'plus') {
+        const isVipTier = tierType === 'pro_vip' || tierType === 'season' || tierType === 'vip' || tierType === 'upgrade';
+        if (isVipTier) {
           return {
-            code: 'PRO_PLUS',
-            type: 'pro_plus',
-            label: '⚡ PRO Plus Member',
-            tag: 'PRO ⚡',
-            icon: '⚡',
-            cls: 'tier-pro-plus',
-            badgeColor: '#38bdf8',
-            badgeBg: 'rgba(6, 182, 212, 0.18)',
+            code: 'PRO_VIP',
+            type: 'pro_vip',
+            label: '👑 PRO VIP Member',
+            tag: 'VIP 👑',
+            icon: '👑',
+            cls: 'tier-pro-vip',
+            badgeColor: '#fbbf24',
+            badgeBg: 'rgba(245, 158, 11, 0.18)',
             isGlowing: true,
             canAccessPredictor: true,
-            canAccessWishlist: false,
-            canAccessChoiceFiller: false,
+            canAccessWishlist: true,
+            canAccessChoiceFiller: true,
             unlimited: true
           };
         }
 
-        // Default any verified premium candidate to Season Pass VIP
+        // Basic Pass / PRO Plus (₹149)
         return {
-          code: 'PRO_VIP',
-          type: 'pro_vip',
-          label: '👑 PRO VIP Member',
-          tag: 'VIP 👑',
-          icon: '👑',
-          cls: 'tier-pro-vip',
-          badgeColor: '#fbbf24',
-          badgeBg: 'rgba(245, 158, 11, 0.18)',
+          code: 'PRO_PLUS',
+          type: 'pro_plus',
+          label: '⚡ PRO Plus Member',
+          tag: 'PRO ⚡',
+          icon: '⚡',
+          cls: 'tier-pro-plus',
+          badgeColor: '#38bdf8',
+          badgeBg: 'rgba(6, 182, 212, 0.18)',
           isGlowing: true,
           canAccessPredictor: true,
-          canAccessWishlist: true,
-          canAccessChoiceFiller: true,
+          canAccessWishlist: false,
+          canAccessChoiceFiller: false,
           unlimited: true
         };
       }
@@ -577,30 +581,6 @@
       return count;
     },
 
-    // ── Verified Tier Activation ──
-    async activateVerifiedTier(tierType = 'pro_vip', paymentId = '') {
-      if (!paymentId) {
-        console.warn("Unauthorized tier change blocked: Payment ID required");
-        return;
-      }
-      const isPrem = tierType.startsWith('pro');
-      if (this.profile) {
-        this.profile.tierType = tierType;
-        this.profile.isPremium = isPrem;
-        this.profile.paymentStatus = 'completed';
-        this.profile.paymentId = paymentId;
-        this.profile.categoryTier = this.getUserCategory();
-      }
-      localStorage.setItem('neet_user_tier_type', tierType);
-      localStorage.setItem('neet_user_is_premium', isPrem ? 'true' : 'false');
-      localStorage.setItem('neet_user_payment_status', 'completed');
-      localStorage.setItem('neet_user_payment_id', paymentId);
-      if (this.profile) localStorage.setItem('neet_auth_profile', JSON.stringify(this.profile));
-
-      this._notifyListeners(this.user);
-      this._syncNavbarUI(this.user);
-    },
-
     onStateChange(fn) {
       if (typeof fn === 'function') {
         this._listeners.push(fn);
@@ -656,7 +636,7 @@
       localStorage.setItem('neet_auth_user', JSON.stringify(minUser));
       
       const localPrem = localStorage.getItem('neet_user_is_premium') === 'true';
-      const localTier = localStorage.getItem('neet_user_tier_type') || (localPrem ? 'pro_vip' : 'free');
+      const localTier = localStorage.getItem('neet_user_tier_type') || (localPrem ? 'pro_plus' : 'free');
       const localPayId = localStorage.getItem('neet_user_payment_id') || '';
 
       const newProf = {
@@ -847,7 +827,7 @@
     async activateVerifiedTier(tierType, paymentId) {
       if (!paymentId) return;
       const isPrem = true;
-      const tier = tierType || 'pro_vip';
+      const tier = tierType || 'pro_plus';
       localStorage.setItem('neet_user_tier_type', tier);
       localStorage.setItem('neet_user_is_premium', 'true');
       localStorage.setItem('neet_user_payment_status', 'completed');
@@ -860,17 +840,25 @@
         localStorage.setItem(`neet_user_payment_id_${uid}`, paymentId);
       }
 
+      const cleanPlanKey = (tier === 'pro_plus' || tier === 'basic') ? 'basic' : 'season';
+      localStorage.setItem('neet_user_plan', cleanPlanKey);
+
       // Append to permanent payment history ledger
       try {
         const histRaw = localStorage.getItem('neet_payment_history');
         const hist = histRaw ? JSON.parse(histRaw) : [];
-        hist.push({
+        const filteredHist = hist.filter(item => item.paymentId !== paymentId);
+        filteredHist.push({
           paymentId: paymentId,
           tierType: tier,
+          tier: tier,
+          planKey: cleanPlanKey,
+          amount: cleanPlanKey === 'basic' ? 149 : 299,
+          amountPaise: cleanPlanKey === 'basic' ? 14900 : 29900,
           uid: uid,
           timestamp: new Date().toISOString()
         });
-        localStorage.setItem('neet_payment_history', JSON.stringify(hist));
+        localStorage.setItem('neet_payment_history', JSON.stringify(filteredHist));
       } catch(e){}
 
       if (this.profile) {
@@ -904,6 +892,9 @@
               email: this.user.email || '',
               displayName: this.user.displayName || '',
               tierType: tier,
+              planKey: cleanPlanKey,
+              amount: cleanPlanKey === 'basic' ? 149 : 299,
+              amountPaise: cleanPlanKey === 'basic' ? 14900 : 29900,
               paymentStatus: 'completed',
               createdAt: this.firestoreModule.serverTimestamp()
             }, { merge: true });

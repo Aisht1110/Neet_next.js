@@ -1,38 +1,48 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
   <url>
-    <loc>https://neetcounsellor.online/</loc>
+    <loc>https://neet.counsellor4u.in/</loc>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://neetcounsellor.online/predict</loc>
+    <loc>https://neet.counsellor4u.in/predict</loc>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://neetcounsellor.online/colleges</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <loc>https://neet.counsellor4u.in/colleges</loc>
+    <lastmod>2026-10-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
   </url>
   <url>
-    <loc>https://neetcounsellor.online/choice-fill</loc>
+    <loc>https://neet.counsellor4u.in/choice-fill</loc>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://neetcounsellor.online/wishlist</loc>
+    <loc>https://neet.counsellor4u.in/wishlist</loc>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://neetcounsellor.online/account</loc>
+    <loc>https://neet.counsellor4u.in/account</loc>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://neetcounsellor.online/support</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <loc>https://neet.counsellor4u.in/support</loc>
+    <lastmod>2026-10-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
   </url>
 </urlset>

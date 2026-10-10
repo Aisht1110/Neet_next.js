@@ -216,7 +216,7 @@ export async function initiateCheckout({
       currency: 'INR',
       name: 'NEET Counselling',
       description: plan.name,
-      image: 'https://neetcounselling.in/favicon.ico',
+      image: 'https://neet.counsellor4u.in/favicon.png',
       order_id: orderData?.orderId || undefined,
       prefill: {
         name: user.displayName || user.email?.split('@')[0] || '',
@@ -258,14 +258,18 @@ export async function initiateCheckout({
             // Append to permanent payment history ledger
             const histRaw = localStorage.getItem('neet_payment_history');
             const hist = histRaw ? JSON.parse(histRaw) : [];
-            hist.push({
+            const filteredHist = hist.filter((item: any) => item.paymentId !== paymentId);
+            filteredHist.push({
               paymentId,
               planKey,
               tier: targetTier,
+              tierType: targetTier,
+              amount: plan.price,
+              amountPaise: plan.amountPaise,
               userId: user?.uid || null,
               timestamp: new Date().toISOString(),
             });
-            localStorage.setItem('neet_payment_history', JSON.stringify(hist));
+            localStorage.setItem('neet_payment_history', JSON.stringify(filteredHist));
           }
         } catch (storageErr) {
           console.warn('Storage lock warning:', storageErr);

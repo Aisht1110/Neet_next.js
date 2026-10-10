@@ -33,10 +33,11 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   feature = 'general'
 }) => {
   const [mounted, setMounted] = useState(false);
-  const { user, profile, activateVerifiedTier } = useAuth();
-  const [couponCode, setCouponCode] = useState('NEETPRO');
+  const { user, profile, tierCategory, activateVerifiedTier } = useAuth();
+  const isProPlus = tierCategory.type === 'pro_plus' || profile?.tierType === 'pro_plus';
+  const [couponCode, setCouponCode] = useState(isProPlus ? '' : 'NEETPRO');
   const [couponStatus, setCouponStatus] = useState('');
-  const [discount, setDiscount] = useState(50); // Default ₹50 off with NEETPRO
+  const [discount, setDiscount] = useState(isProPlus ? 0 : 50); // Default ₹50 off with NEETPRO for fresh purchases
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
       setDiscount(0);
       return;
     }
-    const res = await validateCoupon(couponCode, 'season');
+    const res = await validateCoupon(couponCode, isProPlus ? 'season' : 'season');
     if (res.valid && res.discountRupees) {
       setDiscount(res.discountRupees);
       setCouponStatus(`✓ ₹${res.discountRupees} off applied!`);
@@ -80,7 +81,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     setIsProcessing(true);
     try {
       await initiateCheckout({
-        planKey: 'season',
+        planKey: isProPlus ? 'upgrade' : 'season',
         couponCode: couponCode.trim(),
         user: user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null,
         onSuccess: async (paymentId, planKey) => {
@@ -102,10 +103,17 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     }
   };
 
-  const basePrice = PLANS.season.price; // 299
+  const basePrice = isProPlus ? PLANS.upgrade.price : PLANS.season.price; // 150 vs 299
   const finalPrice = Math.max(1, basePrice - discount);
 
   const getFeatureHeadline = () => {
+    if (isProPlus) {
+      return {
+        badge: 'VIP Difference Upgrade',
+        title: 'Upgrade to Season Pass VIP (₹150)',
+        desc: 'You already own the Basic Pass (₹149). Pay only the ₹150 difference to unlock the Choice Sequencer, College Shortlist, and all VIP privileges.'
+      };
+    }
     if (feature === 'wishlist') {
       return {
         badge: 'Shortlist Locked',
@@ -243,12 +251,16 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
         {/* Price & Checkout CTA */}
         <div className="mt-5 pt-4 border-t border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-center sm:text-left">
-            <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-white/50 block">All Rounds Access (1 Year)</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-white/50 block">
+              {isProPlus ? 'Difference Payment (Basic Credited ₹149)' : 'All Rounds Access (1 Year)'}
+            </span>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl sm:text-3xl font-black text-amber-700 dark:text-amber-300 mono-font">
                 ₹{finalPrice}
               </span>
-              <span className="text-xs text-slate-400 dark:text-white/40 line-through">₹599</span>
+              <span className="text-xs text-slate-400 dark:text-white/40 line-through">
+                {isProPlus ? '₹299' : '₹599'}
+              </span>
               {discount > 0 && (
                 <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">Save ₹{discount}!</span>
               )}
@@ -271,7 +283,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             ) : (
               <>
                 <Crown className="h-4 w-4" />
-                <span>Unlock Season Pass (₹{finalPrice})</span>
+                <span>{isProPlus ? `Pay ₹${finalPrice} & Upgrade to VIP` : `Unlock Season Pass (₹${finalPrice})`}</span>
               </>
             )}
           </motion.button>

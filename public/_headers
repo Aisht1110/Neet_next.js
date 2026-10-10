@@ -1,0 +1,35 @@
+# Cloudflare Pages Security & Performance Headers
+# Production Domain: https://neet.counsellor4u.in
+
+# Global headers for all routes
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Cache-control for immutable static assets (Turbopack / Next.js chunks)
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Cache-control for public data files (cutoffs & colleges datasets)
+/data/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Access-Control-Allow-Origin: *
+
+# Cache-control for Web App Manifest & SEO discovery files
+/sitemap.xml
+  Cache-Control: public, max-age=86400
+  Content-Type: application/xml; charset=utf-8
+
+/robots.txt
+  Cache-Control: public, max-age=86400
+  Content-Type: text/plain; charset=utf-8
+
+/manifest.json
+  Cache-Control: public, max-age=86400
+  Content-Type: application/manifest+json; charset=utf-8
+
+# Cache-control for HTML documents (ensure visitors always get freshest deployment)
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate

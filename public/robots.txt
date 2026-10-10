@@ -6,5 +6,18 @@ Allow: /
 Disallow: /.env*
 Disallow: /api/
 
-# Sitemap location
-Sitemap: https://neetcounsellor.online/sitemap.xml
+# Explicit crawl permissions for Googlebot
+User-agent: Googlebot
+Allow: /
+Allow: /_next/static/
+Allow: /_next/image*
+
+# Explicit permissions for Googlebot-Image
+User-agent: Googlebot-Image
+Allow: /
+Allow: /icon*.png
+Allow: /favicon*.png
+
+# Host & Sitemap location
+Host: https://neet.counsellor4u.in
+Sitemap: https://neet.counsellor4u.in/sitemap.xml

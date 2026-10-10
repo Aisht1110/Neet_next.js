@@ -39,10 +39,11 @@ export default function ChoiceFillPage() {
     isLoaded,
     syncStatus
   } = useUserData();
-  const { user, tierCategory, signInWithGoogle, signInAsDemoCandidate } = useAuth();
+  const { user, profile, tierCategory, signInWithGoogle, signInAsDemoCandidate } = useAuth();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const isProPlus = tierCategory.type === 'pro_plus' || profile?.tierType === 'pro_plus';
 
   const [authError, setAuthError] = useState('');
 
@@ -148,7 +149,15 @@ export default function ChoiceFillPage() {
               onClick={() => signInAsDemoCandidate('free')}
               className="flex-1 py-1.5 text-[11px] font-bold rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white transition-all cursor-pointer text-center"
             >
-              Test Basic Free (5 Runs)
+              Test Free (5)
+            </button>
+            <button
+              type="button"
+              onClick={() => signInAsDemoCandidate('pro_plus')}
+              className="flex-1 py-1.5 text-[11px] font-bold rounded-xl border border-teal-500/40 bg-teal-500/10 hover:bg-teal-500/20 text-teal-800 dark:text-teal-300 transition-all cursor-pointer flex items-center justify-center gap-1"
+            >
+              <Zap className="h-3 w-3 text-teal-500" />
+              <span>Test Basic (₹149)</span>
             </button>
             <button
               type="button"
@@ -156,7 +165,7 @@ export default function ChoiceFillPage() {
               className="flex-1 py-1.5 text-[11px] font-bold rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 transition-all cursor-pointer flex items-center justify-center gap-1"
             >
               <Crown className="h-3 w-3 text-amber-500" />
-              <span>Test VIP Pass (Unlocked)</span>
+              <span>Test VIP (₹299)</span>
             </button>
           </div>
         </div>
@@ -245,10 +254,14 @@ export default function ChoiceFillPage() {
                 className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-xs sm:text-sm shadow-[0_4px_20px_rgba(245,158,11,0.35)] hover:brightness-110 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <Crown className="h-4 w-4" />
-                <span>Unlock Season Pass VIP</span>
+                <span>{isProPlus ? 'Upgrade to Season Pass VIP (₹150)' : 'Unlock Season Pass VIP'}</span>
               </button>
               <span className="text-[11px] text-slate-500 dark:text-white/50">
-                Use code <strong>NEETPRO</strong> for ₹50 off
+                {isProPlus ? (
+                  <span>Basic Pass credited · <strong>Pay ₹150 Difference Only</strong></span>
+                ) : (
+                  <span>Use code <strong>NEETPRO</strong> for ₹50 off</span>
+                )}
               </span>
             </div>
           </div>

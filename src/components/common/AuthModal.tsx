@@ -109,7 +109,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemo = async (tier: 'free' | 'pro_vip') => {
+  const handleQuickDemo = async (tier: 'free' | 'pro_plus' | 'pro_vip') => {
     setError('');
     setIsSubmitting(true);
     try {
@@ -351,16 +351,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Quick Demo Test Access Buttons */}
           <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 space-y-1.5 text-center">
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={() => handleQuickDemo('free')}
                 disabled={isSubmitting}
-                className="flex-1 py-1.5 px-2 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white text-[11px] font-bold transition-all cursor-pointer"
+                className="py-1.5 px-1 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white text-[11px] font-bold transition-all cursor-pointer text-center"
               >
-                Test Basic Free (5 Runs)
+                Test Free (5)
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={() => handleQuickDemo('pro_plus')}
+                disabled={isSubmitting}
+                className="py-1.5 px-1 rounded-xl border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-800 dark:text-sky-300 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+              >
+                <Zap className="h-3 w-3 text-sky-500 shrink-0" />
+                <span>Test Basic</span>
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -368,10 +379,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 type="button"
                 onClick={() => handleQuickDemo('pro_vip')}
                 disabled={isSubmitting}
-                className="flex-1 py-1.5 px-2 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                className="py-1.5 px-1 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
               >
-                <Crown className="h-3 w-3 text-amber-500" />
-                <span>Test VIP Pass</span>
+                <Crown className="h-3 w-3 text-amber-500 shrink-0" />
+                <span>Test VIP</span>
               </motion.button>
             </div>
             <p className="text-[10px] text-slate-500 dark:text-white/40">

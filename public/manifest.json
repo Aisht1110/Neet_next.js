@@ -1,0 +1,32 @@
+{
+  "name": "NEET Counselling — AI College Predictor",
+  "short_name": "NEET Predictor",
+  "description": "Forecast MBBS, BDS & AYUSH admission chances using 70,000+ verified MCC allotment records.",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070710",
+  "theme_color": "#070710",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["education", "productivity"]
+}
