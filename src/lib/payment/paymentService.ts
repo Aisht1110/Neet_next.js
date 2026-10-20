@@ -44,8 +44,8 @@ export const PLANS: Record<string, PlanDetails> = {
   },
 };
 
-const WORKER_BASE_URL = process.env.NEXT_PUBLIC_PAYMENT_WORKER_URL || "https://neet-payment-worker.upmatripathi500.workers.dev";
-const FALLBACK_RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || "";
+const WORKER_BASE_URL = process.env.NEXT_PUBLIC_PAYMENT_WORKER_URL || 'https://neet-payment-worker.upmatripathi500.workers.dev';
+const FALLBACK_RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || '';
 
 interface RazorpaySuccessResponse {
   razorpay_payment_id: string;
@@ -106,63 +106,52 @@ export interface CouponResult {
   message?: string;
 }
 
+/**
+ * Coupon validation is authoritative only on the payment Worker. The client
+ * never decides discount amounts — it merely displays what the server returns.
+ * If the Worker is unreachable we fail closed (invalid) so a client can never
+ * fabricate a discount.
+ */
 export async function validateCoupon(code: string, planKey: 'basic' | 'season' = 'season'): Promise<CouponResult> {
   if (!code || !code.trim()) {
     return { valid: false, message: 'Please enter a coupon code' };
   }
 
-  const clean = code.trim().toUpperCase();
-
-  // 1. Direct Cloudflare Worker validation
   try {
     const res = await fetch(`${WORKER_BASE_URL}/api/validate-coupon`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: clean, planKey }),
+      body: JSON.stringify({ code: code.trim().toUpperCase(), planKey }),
     });
     if (res.ok) {
-      return await res.json();
+      return (await res.json()) as CouponResult;
     }
-  } catch (err) {
-    console.warn('Worker coupon validation fallback to local rules:', err);
+    return { valid: false, message: 'Coupon could not be verified. Please try again.' };
+  } catch {
+    return { valid: false, message: 'Coupon service unavailable. Please try again later.' };
   }
+}
 
-  // 3. Local fallback coupon rules
-  const localCoupons: Record<string, number> = {
-    'NEETPRO': 50,
-    'NEETPASS': 50,
-    'NEET2026': 50,
-    'EARLYBIRD': 50,
-    'MEDICO50': 50,
-    'DOCTOR100': 100,
-    'NEET50': 50,
-  };
-
-  if (localCoupons[clean]) {
-    const discount = localCoupons[clean];
-    const plan = PLANS[planKey] || PLANS.season;
-    return {
-      valid: true,
-      code: clean,
-      discountRupees: discount,
-      finalAmountRupees: Math.max(1, plan.price - discount),
-      finalAmountPaise: Math.max(100, plan.amountPaise - (discount * 100)),
-      message: `₹${discount} Discount Applied!`,
-    };
-  }
-
-  return { valid: false, message: 'Invalid or expired coupon code' };
+export interface CheckoutSuccessPayload {
+  paymentId: string;
+  planKey: 'basic' | 'season' | 'upgrade';
+  tier: 'pro_plus' | 'pro_vip';
 }
 
 export interface CheckoutOptions {
   planKey: 'basic' | 'season' | 'upgrade';
   couponCode?: string;
   user: { uid: string; email: string | null; displayName: string | null } | null;
-  onSuccess: (paymentId: string, planKey: 'basic' | 'season' | 'upgrade') => void;
+  onSuccess: (payload: CheckoutSuccessPayload) => void;
   onDismiss?: () => void;
   onError?: (err: Error) => void;
 }
 
+/**
+ * Opens the Razorpay checkout and, on success, asks the payment Worker to
+ * verify the payment server-side. Entitlement is granted ONLY from the
+ * verification response — never from a client-side payment id or localStorage.
+ */
 export async function initiateCheckout({
   planKey,
   couponCode = '',
@@ -184,7 +173,7 @@ export async function initiateCheckout({
     const Razorpay = await loadRazorpaySDK();
     if (!Razorpay) throw new Error('Razorpay Checkout SDK could not be initialized');
 
-    // Create order via direct Cloudflare Worker
+    // Create order via the payment Worker (authoritative amount is computed there).
     let orderData: OrderDataResponse | null = null;
     try {
       const res = await fetch(`${WORKER_BASE_URL}/api/create-order`, {
@@ -199,25 +188,21 @@ export async function initiateCheckout({
       });
       if (res.ok) orderData = (await res.json()) as OrderDataResponse;
     } catch (e) {
-      console.warn('Worker direct create-order fallback to client mode:', e);
+      console.warn('Worker create-order failed:', e);
     }
 
-    let finalAmountPaise = plan.amountPaise;
-    if (couponCode) {
-      const couponCheck = await validateCoupon(couponCode, planKey === 'upgrade' ? 'season' : planKey);
-      if (couponCheck.valid && couponCheck.finalAmountPaise) {
-        finalAmountPaise = couponCheck.finalAmountPaise;
-      }
+    if (!orderData?.orderId || !orderData?.keyId) {
+      throw new Error('Unable to start secure checkout. Please try again in a moment.');
     }
 
     const rzpOptions = {
-      key: orderData?.keyId || FALLBACK_RAZORPAY_KEY,
-      amount: orderData?.amount || finalAmountPaise,
+      key: orderData.keyId,
+      amount: orderData.amount,
       currency: 'INR',
       name: 'NEET Counselling',
       description: plan.name,
       image: 'https://neet.counsellor4u.in/favicon.png',
-      order_id: orderData?.orderId || undefined,
+      order_id: orderData.orderId,
       prefill: {
         name: user.displayName || user.email?.split('@')[0] || '',
         email: user.email || '',
@@ -225,7 +210,6 @@ export async function initiateCheckout({
       notes: {
         userId: user.uid,
         planKey: planKey,
-        tier: plan.tier,
         couponCode: couponCode || 'NONE',
       },
       theme: {
@@ -238,76 +222,45 @@ export async function initiateCheckout({
         },
       },
       handler: async function (response: RazorpaySuccessResponse) {
-        const paymentId = response.razorpay_payment_id || `rzp_verified_${Date.now()}`;
-        const targetTier = plan.tier;
-
-        // 1. Immediately lock verified payment into localStorage across all keys
         try {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('neet_user_is_premium', 'true');
-            localStorage.setItem('neet_user_tier_type', targetTier);
-            localStorage.setItem('neet_user_payment_status', 'completed');
-            localStorage.setItem('neet_user_payment_id', paymentId);
-            localStorage.setItem('neet_user_plan', planKey);
-            if (user?.uid) {
-              localStorage.setItem(`neet_user_premium_${user.uid}`, 'true');
-              localStorage.setItem(`neet_user_tier_${user.uid}`, targetTier);
-              localStorage.setItem(`neet_user_payment_id_${user.uid}`, paymentId);
-            }
-
-            // Append to permanent payment history ledger
-            const histRaw = localStorage.getItem('neet_payment_history');
-            const hist = histRaw ? JSON.parse(histRaw) : [];
-            const filteredHist = hist.filter((item: any) => item.paymentId !== paymentId);
-            filteredHist.push({
-              paymentId,
-              planKey,
-              tier: targetTier,
-              tierType: targetTier,
-              amount: plan.price,
-              amountPaise: plan.amountPaise,
-              userId: user?.uid || null,
-              timestamp: new Date().toISOString(),
-            });
-            localStorage.setItem('neet_payment_history', JSON.stringify(filteredHist));
-          }
-        } catch (storageErr) {
-          console.warn('Storage lock warning:', storageErr);
-        }
-
-        // 2. Verify with Cloudflare Worker
-        try {
-          const verifyPayload = {
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpayOrderId: response.razorpay_order_id,
-            razorpaySignature: response.razorpay_signature,
-            userId: user?.uid || '',
-            planKey,
-          };
-
-          await fetch(`${WORKER_BASE_URL}/api/verify-payment`, {
+          // Verify server-side. The Worker checks the Razorpay signature and
+          // writes the entitlement; the client only mirrors the verified result.
+          const verifyRes = await fetch(`${WORKER_BASE_URL}/api/verify-payment`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(verifyPayload),
+            body: JSON.stringify({
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+              userId: user.uid,
+              planKey,
+            }),
           });
-        } catch (e) {
-          console.warn('Worker verification ping note:', e);
-        }
 
-        // 3. Instant tier activation in global window.Auth if available
-        if (typeof window !== 'undefined' && (window as any).Auth) {
-          const winAuth = (window as any).Auth;
-          if (typeof winAuth.activateVerifiedTier === 'function') {
-            try {
-              await winAuth.activateVerifiedTier(targetTier, paymentId);
-            } catch (authErr) {
-              console.warn('winAuth.activateVerifiedTier warning:', authErr);
-            }
+          if (!verifyRes.ok) {
+            throw new Error('Payment verification failed. If money was debited, contact support with your payment ID.');
+          }
+
+          const verified = (await verifyRes.json()) as {
+            verified?: boolean;
+            tier?: 'pro_plus' | 'pro_vip';
+            planKey?: 'basic' | 'season';
+          };
+
+          if (!verified?.verified || !verified.tier) {
+            throw new Error('Payment could not be verified. If money was debited, contact support with your payment ID.');
+          }
+
+          onSuccess({
+            paymentId: response.razorpay_payment_id,
+            planKey,
+            tier: verified.tier,
+          });
+        } catch (verifyErr) {
+          if (onError) {
+            onError(verifyErr instanceof Error ? verifyErr : new Error(String(verifyErr)));
           }
         }
-
-        // 4. Trigger caller success handler
-        onSuccess(paymentId, planKey);
       },
     };
 

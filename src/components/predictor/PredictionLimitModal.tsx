@@ -46,9 +46,8 @@ export const PredictionLimitModal: React.FC<PredictionLimitModalProps> = ({
       planKey,
       couponCode,
       user,
-      onSuccess: async (paymentId) => {
-        const tierType = planKey === 'season' ? 'pro_vip' : 'pro_plus';
-        await activateVerifiedTier(tierType, paymentId);
+      onSuccess: async ({ paymentId, tier }) => {
+        await activateVerifiedTier(tier, paymentId);
         onClose();
         if (onUpgradeSuccess) onUpgradeSuccess(planKey, paymentId);
       },

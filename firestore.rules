@@ -20,43 +20,23 @@ service cloud.firestore {
       // User can read their own profile
       allow read: if isOwner(uid);
 
-      // User can create their initial profile on Sign Up / Google First Login
-      // Enforces that new accounts start as free/unpaid UNLESS activating with verified payment
+      // New accounts are ONLY ever created as free. Entitlement fields are
+      // written exclusively by the trusted backend (payment Worker) using the
+      // Admin SDK, which bypasses these rules.
       allow create: if isOwner(uid)
-                    && (
-                      // Case 1: Standard new user signup (starts as free)
-                      (
-                        (!('isPremium' in request.resource.data) || request.resource.data.isPremium == false)
-                        && (!('tierType' in request.resource.data) || request.resource.data.tierType == 'free')
-                        && (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus == 'none')
-                      )
-                      // Case 2: Signup with verified payment attached
-                      || (
-                        request.resource.data.paymentStatus == 'completed'
-                        && request.resource.data.isPremium == true
-                        && request.resource.data.paymentId is string
-                        && request.resource.data.paymentId.size() > 5
-                      )
-                    );
+                    && (!('isPremium' in request.resource.data) || request.resource.data.isPremium == false)
+                    && (!('tierType' in request.resource.data) || request.resource.data.tierType == 'free')
+                    && (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus == 'none')
+                    && (!('paymentId' in request.resource.data) || request.resource.data.paymentId == '');
 
-      // User can update profile details (name, rank, score, category, predictions, last login):
-      // - Standard profile update: blocked from modifying payment keys arbitrarily
-      // - Verified payment upgrade: permitted when valid paymentId & completed status are supplied
+      // Users may update profile details (name, rank, score, category, count,
+      // last login) but can NEVER modify entitlement fields from the client.
+      // Tier grants are applied server-side by the payment Worker (Admin SDK).
       allow update: if isOwner(uid)
-                    && (
-                      // Case A: Standard profile updates without touching protected payment fields
-                      !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-                        'isPremium', 'paymentId', 'paymentStatus', 'tierType', 'amountPaise', 'verifiedAt'
-                      ])
-                      // Case B: Verified subscription upgrade from Web or Mobile checkout
-                      || (
-                        request.resource.data.paymentStatus == 'completed'
-                        && request.resource.data.isPremium == true
-                        && request.resource.data.paymentId is string
-                        && request.resource.data.paymentId.size() > 5
-                        && request.resource.data.tierType in ['pro_vip', 'pro_plus', 'season', 'basic']
-                      )
-                    );
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                      'isPremium', 'paymentId', 'paymentStatus', 'tierType',
+                      'amountPaise', 'premiumTier', 'verifiedAt', 'upgradedAt'
+                    ]);
 
       // User can permanently delete their account profile (Delete Account feature)
       allow delete: if isOwner(uid);
@@ -91,41 +71,30 @@ service cloud.firestore {
 
     // ─────────────────────────────────────
     //  5. PENDING PAYMENTS COLLECTION (/pending_payments/{paymentId})
+    //     Owned by the trusted payment Worker (Admin SDK). Clients may read
+    //     their own order statuses but cannot create/alter them.
     // ─────────────────────────────────────
     match /pending_payments/{paymentId} {
-      // User can create a pending payment intent when opening Razorpay
-      allow create: if isAuthenticated()
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.status == 'pending'
-                    && !('isPremium' in request.resource.data);
-
-      // User can read status of their own payment orders
       allow read: if isAuthenticated()
                   && resource.data.uid == request.auth.uid;
 
-      // Allow updating pending payment status when completed or closed
-      allow update: if isAuthenticated()
-                    && resource.data.uid == request.auth.uid;
-
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     // ─────────────────────────────────────
     //  6. PAYMENTS COLLECTION (/payments/{paymentId})
-    //     For Admin Analytics & Transaction Records (Web & Mobile)
+    //     Server-written audit records. The trusted payment Worker (Admin SDK)
+    //     creates these after Razorpay signature verification. Clients may read
+    //     their own receipts for the restore flow but can NEVER write here, so a
+    //     forged receipt can never be fabricated from the browser.
     // ─────────────────────────────────────
     match /payments/{paymentId} {
-      // Record completed transaction for analytics & audit
-      allow create: if isAuthenticated()
-                    && request.resource.data.paymentStatus == 'completed';
-
-      allow update: if isAuthenticated()
-                    && request.resource.data.paymentStatus == 'completed';
-
-      // Allow candidate to verify the transaction plan by exact payment ID receipt
+      // A candidate may read a receipt to restore a pass (ownership enforced client-side
+      // by matching uid; the doc itself contains no secrets beyond the payment id).
       allow read: if isAuthenticated();
 
-      allow delete: if false;
+      // Writes happen exclusively via the Admin SDK in the payment Worker.
+      allow create, update, delete: if false;
     }
 
     // ─────────────────────────────────────

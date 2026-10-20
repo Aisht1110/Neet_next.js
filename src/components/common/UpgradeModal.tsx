@@ -84,8 +84,8 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
         planKey: isProPlus ? 'upgrade' : 'season',
         couponCode: couponCode.trim(),
         user: user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null,
-        onSuccess: async (paymentId, planKey) => {
-          await activateVerifiedTier('pro_vip', paymentId);
+        onSuccess: async ({ paymentId, tier }) => {
+          await activateVerifiedTier(tier, paymentId);
           setIsProcessing(false);
           onClose();
         },

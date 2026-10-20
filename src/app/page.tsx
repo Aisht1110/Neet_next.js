@@ -27,7 +27,7 @@ import {
 import { scoreToRank } from '@/lib/engine/scoreToRank';
 import { BrandIcon } from '@/components/common/BrandIcon';
 import { useAuth } from '@/lib/firebase/AuthContext';
-import { initiateCheckout } from '@/lib/payment/paymentService';
+import { initiateCheckout, validateCoupon } from '@/lib/payment/paymentService';
 import { PaymentCelebrationModal } from '@/components/payment/PaymentCelebrationModal';
 import { ProCandidateDashboard } from '@/components/dashboard/ProCandidateDashboard';
 
@@ -41,6 +41,9 @@ export default function HomePage() {
   const [category, setCategory] = useState<string>('Open');
   const [couponCode, setCouponCode] = useState<string>('');
   const [discountApplied, setDiscountApplied] = useState<boolean>(false);
+  const [couponDiscountRupees, setCouponDiscountRupees] = useState<number>(0);
+  const [couponFinalAmount, setCouponFinalAmount] = useState<number | null>(null);
+  const [couponError, setCouponError] = useState<string>('');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [celebration, setCelebration] = useState<{ open: boolean; planKey: string; paymentId: string }>({
     open: false,
@@ -66,8 +69,7 @@ export default function HomePage() {
       planKey,
       couponCode: discountApplied ? couponCode : '',
       user,
-      onSuccess: async (paymentId) => {
-        const tier = planKey === 'season' ? 'pro_vip' : 'pro_plus';
+      onSuccess: async ({ paymentId, tier }) => {
         await activateVerifiedTier(tier, paymentId);
         setCelebration({ open: true, planKey, paymentId });
       },
@@ -83,8 +85,8 @@ export default function HomePage() {
       planKey: 'upgrade',
       couponCode: '',
       user,
-      onSuccess: async (paymentId) => {
-        await activateVerifiedTier('pro_vip', paymentId);
+      onSuccess: async ({ paymentId, tier }) => {
+        await activateVerifiedTier(tier, paymentId);
         setCelebration({ open: true, planKey: 'upgrade', paymentId });
       },
     });
@@ -146,13 +148,22 @@ export default function HomePage() {
 
   const teaserColleges = getTeaserColleges(currentRank);
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
+  const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = couponCode.trim().toUpperCase();
-    if (['NEET', 'NEET50', 'DOCTOR', 'OFF50', 'NEETPRO', 'NEETPASS', 'NEET2026'].includes(code)) {
+    if (!code) return;
+    // Coupon validity and discount are authoritative on the payment Worker only.
+    const res = await validateCoupon(code, 'season');
+    if (res.valid && res.discountRupees) {
       setDiscountApplied(true);
+      setCouponDiscountRupees(res.discountRupees);
+      setCouponFinalAmount(res.finalAmountRupees ?? null);
+      setCouponError('');
     } else {
-      alert('Invalid coupon code. Try "NEETPRO" or "NEET50" for ₹50 off.');
+      setDiscountApplied(false);
+      setCouponDiscountRupees(0);
+      setCouponFinalAmount(null);
+      setCouponError(res.message || 'Invalid or expired coupon code.');
     }
   };
 
@@ -784,12 +795,12 @@ export default function HomePage() {
 
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-4xl sm:text-5xl font-black text-amber-300 font-mono">
-                    ₹{discountApplied ? '249' : '299'}
+                    ₹{couponFinalAmount ?? 299}
                   </span>
                   <span className="text-sm text-white/40 line-through font-mono">₹599</span>
-                  {discountApplied && (
+                  {discountApplied && couponDiscountRupees > 0 && (
                     <span className="text-xs font-bold text-amber-400 ml-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
-                      ₹50 Coupon Applied
+                      ₹{couponDiscountRupees} Coupon Applied
                     </span>
                   )}
                 </div>
@@ -839,21 +850,26 @@ export default function HomePage() {
               <div className="mt-8 pt-4">
                 {/* Coupon Code Box */}
                 {!discountApplied && (
-                  <form onSubmit={handleApplyCoupon} className="flex gap-2 mb-3.5">
-                    <input
-                      type="text"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      placeholder="PROMO CODE (e.g. NEET50)"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold placeholder:text-white/40 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 transition-all cursor-pointer shadow-sm"
-                    >
-                      Apply
-                    </button>
-                  </form>
+                  <>
+                    <form onSubmit={handleApplyCoupon} className="flex gap-2 mb-1.5">
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => { setCouponCode(e.target.value); setCouponError(''); }}
+                        placeholder="PROMO CODE (e.g. NEET50)"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold placeholder:text-white/40 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 transition-all cursor-pointer shadow-sm"
+                      >
+                        Apply
+                      </button>
+                    </form>
+                    {couponError && (
+                      <p className="text-[11px] text-rose-300 font-semibold mb-2.5">{couponError}</p>
+                    )}
+                  </>
                 )}
 
                 {tierCategory.type === 'pro_vip' ? (

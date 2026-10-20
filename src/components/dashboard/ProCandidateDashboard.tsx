@@ -135,8 +135,8 @@ export const ProCandidateDashboard: React.FC<ProCandidateDashboardProps> = ({ on
       planKey: 'upgrade',
       couponCode: '',
       user,
-      onSuccess: async (paymentId) => {
-        await activateVerifiedTier('pro_vip', paymentId);
+      onSuccess: async ({ paymentId, tier }) => {
+        await activateVerifiedTier(tier, paymentId);
         setCelebration({ open: true, planKey: 'upgrade', paymentId });
       },
     });

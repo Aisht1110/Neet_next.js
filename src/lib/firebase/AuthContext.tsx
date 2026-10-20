@@ -204,15 +204,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Instant 0ms Synchronous Boot from Cache
+  // Instant 0ms Synchronous Boot from Cache.
+  // NOTE: Only the user identity and non-entitlement profile fields are restored
+  // optimistically. Premium/tier is ALWAYS resolved from the server document by
+  // syncProfileFromFirestore — localStorage is never treated as proof of purchase.
   const bootstrapFromCache = useCallback(() => {
     try {
       const cachedUserRaw = localStorage.getItem('neet_auth_user');
       const cachedProfRaw = localStorage.getItem('neet_auth_profile');
-      const isPremRaw = localStorage.getItem('neet_user_is_premium') === 'true';
-      const tierRaw = localStorage.getItem('neet_user_tier_type') || '';
       const countRaw = parseInt(localStorage.getItem('neet_predictions_count') || '0', 10);
-      const paymentIdRaw = localStorage.getItem('neet_user_payment_id') || '';
 
       let cachedUser: FirebaseUser | null = null;
       let cachedProf: any = {};
@@ -224,52 +224,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try { cachedProf = JSON.parse(cachedProfRaw); } catch(e){}
       }
 
-      const userPremRaw = cachedUser?.uid ? localStorage.getItem(`neet_user_premium_${cachedUser.uid}`) === 'true' : false;
-      const userTierRaw = cachedUser?.uid ? localStorage.getItem(`neet_user_tier_${cachedUser.uid}`) : '';
-
-      // Check payment ledger for persistent proof of purchase
-      let hasHistoryPayment = false;
-      try {
-        const histRaw = localStorage.getItem('neet_payment_history');
-        if (histRaw) {
-          const hist = JSON.parse(histRaw);
-          if (Array.isArray(hist) && hist.length > 0) hasHistoryPayment = true;
-        }
-      } catch(e){}
-
-      const isPremium = Boolean(
-        isPremRaw || 
-        userPremRaw || 
-        cachedProf.isPremium || 
-        hasHistoryPayment || 
-        (paymentIdRaw && paymentIdRaw.startsWith('rzp_'))
-      );
-
-      let tierType = 'free';
-      if (isPremium) {
-        const planStored = typeof window !== 'undefined' ? localStorage.getItem('neet_user_plan') : null;
-        if (tierRaw === 'pro_plus' || userTierRaw === 'pro_plus' || planStored === 'basic') {
-          tierType = 'pro_plus';
-        } else if (tierRaw === 'pro_vip' || userTierRaw === 'pro_vip' || planStored === 'season') {
-          tierType = 'pro_vip';
-        } else if (cachedProf.tierType && cachedProf.tierType !== 'free') {
-          tierType = cachedProf.tierType;
-        } else {
-          try {
-            const histRaw = localStorage.getItem('neet_payment_history');
-            if (histRaw) {
-              const hist = JSON.parse(histRaw);
-              if (Array.isArray(hist) && hist.length > 0) {
-                const last = hist[hist.length - 1];
-                if (last?.tier === 'pro_plus' || last?.tierType === 'pro_plus' || last?.planKey === 'basic') {
-                  tierType = 'pro_plus';
-                }
-              }
-            }
-          } catch(e){}
-          if (tierType === 'free') tierType = 'pro_plus';
-        }
-      }
+      // Entitlement is never granted from cache — wait for server confirmation.
+      const isPremium = false;
+      const tierType = 'free';
 
       const cat = computeUserCategory(cachedUser, isPremium, tierType);
 
@@ -287,8 +244,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           state: cachedProf.state || localStorage.getItem('neet_user_state') || '',
           tierType: tierType,
           isPremium: isPremium,
-          paymentStatus: isPremium ? 'completed' : 'none',
-          paymentId: cachedProf.paymentId || paymentIdRaw || '',
+          paymentStatus: 'none',
+          paymentId: '',
           predictionsCount: countRaw,
           categoryTier: cat,
           createdAt: cachedProf.createdAt,
@@ -297,10 +254,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setProfile({
           ...defaultProfile,
-          tierType: isPremium ? tierType : 'free',
-          isPremium: isPremium,
-          paymentStatus: isPremium ? 'completed' : 'none',
-          paymentId: paymentIdRaw || '',
+          tierType: 'free',
+          isPremium: false,
+          paymentStatus: 'none',
+          paymentId: '',
           predictionsCount: countRaw,
           categoryTier: cat,
         });
@@ -318,38 +275,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const docRef = sdk.firestoreMod.doc(sdk.db, "users", firebaseUser.uid);
       const docSnap = await sdk.firestoreMod.getDoc(docRef);
 
-      // Check local verified payment records to prevent clobbering paid status
-      const localPremRaw = typeof window !== 'undefined' && localStorage.getItem('neet_user_is_premium') === 'true';
-      const userPremRaw = typeof window !== 'undefined' && localStorage.getItem(`neet_user_premium_${firebaseUser.uid}`) === 'true';
-      const localPaymentId = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_payment_id') || localStorage.getItem(`neet_user_payment_id_${firebaseUser.uid}`) || '') : '';
-      const localPaymentStatus = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_payment_status') || '') : '';
-      const localTierType = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_tier_type') || localStorage.getItem(`neet_user_tier_${firebaseUser.uid}`) || '') : '';
-
-      let cachedProf: any = {};
-      try {
-        const raw = localStorage.getItem('neet_auth_profile') || localStorage.getItem(`neet_user_profile_${firebaseUser.uid}`);
-        if (raw) cachedProf = JSON.parse(raw);
-      } catch(e){}
-
-      // Check payment ledger
-      let hasHistoryPayment = false;
-      try {
-        const histRaw = localStorage.getItem('neet_payment_history');
-        if (histRaw) {
-          const hist = JSON.parse(histRaw);
-          if (Array.isArray(hist) && hist.length > 0) hasHistoryPayment = true;
-        }
-      } catch(e){}
-
-      const localHasVerified = Boolean(
-        (localPremRaw || userPremRaw || cachedProf.isPremium || hasHistoryPayment) &&
-        (localPaymentStatus === 'completed' || localPaymentId || hasHistoryPayment || (localTierType && localTierType !== 'free') || (cachedProf.tierType && cachedProf.tierType !== 'free'))
-      );
-
       let data: any = {};
       if (docSnap.exists()) {
         data = docSnap.data();
       } else {
+        // New profile documents ALWAYS start as free. Entitlement is only ever
+        // granted by the trusted payment Worker / backend after it has verified
+        // the Razorpay signature. localStorage and client input are never proof.
         const localProf = localStorage.getItem('neet_auth_profile');
         const p = localProf ? JSON.parse(localProf) : {};
         data = {
@@ -359,10 +291,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           rank: p.rank || localStorage.getItem('neet_user_rank') || '',
           category: p.category || localStorage.getItem('neet_user_category') || 'Open',
           state: p.state || localStorage.getItem('neet_user_state') || '',
-          isPremium: localHasVerified,
-          tierType: localHasVerified ? (localTierType || 'pro_plus') : 'free',
-          paymentStatus: localHasVerified ? 'completed' : 'none',
-          paymentId: localHasVerified ? (localPaymentId || 'rzp_verified') : '',
+          isPremium: false,
+          tierType: 'free',
+          paymentStatus: 'none',
+          paymentId: '',
           predictionsCount: parseInt(localStorage.getItem('neet_predictions_count') || '0', 10),
           createdAt: sdk.firestoreMod.serverTimestamp(),
           lastLoginAt: sdk.firestoreMod.serverTimestamp(),
@@ -372,66 +304,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch(e){}
       }
 
-      // Check server payment status (broad, flexible detection)
+      // Entitlement is derived ONLY from the server document written by the
+      // trusted backend. Client-provided premium flags are ignored entirely.
       const serverIsPremium = Boolean(
         data.isPremium === true ||
-        data.isPremium === 'true' ||
         data.tierType === 'pro_vip' ||
-        data.tierType === 'pro_plus' ||
-        data.premiumTier === 'pro_vip' ||
-        data.premiumTier === 'pro_plus' ||
-        ((data.paymentStatus === 'completed' || data.paymentStatus === 'paid' || data.paymentStatus === 'captured' || data.paymentStatus === 'active') && (data.paymentId || data.razorpayPaymentId))
+        data.tierType === 'pro_plus'
       );
 
-      const serverTier = data.tierType || data.premiumTier || (data.plan === 'basic' ? 'pro_plus' : data.plan === 'season' ? 'pro_vip' : undefined);
+      const serverTier = data.tierType || (data.plan === 'basic' ? 'pro_plus' : data.plan === 'season' ? 'pro_vip' : undefined);
 
-      // The user is premium if EITHER the server validates it OR this local client has verified payment proof
-      const isPremium = Boolean(serverIsPremium || localHasVerified);
+      const isPremium = serverIsPremium;
 
       let tierType = 'free';
       if (isPremium) {
-        const planStored = typeof window !== 'undefined' ? localStorage.getItem('neet_user_plan') : null;
-        if (serverTier === 'pro_plus' || localTierType === 'pro_plus' || planStored === 'basic') {
-          tierType = 'pro_plus';
-        } else if (serverTier === 'pro_vip' || localTierType === 'pro_vip' || planStored === 'season') {
-          tierType = 'pro_vip';
-        } else if (cachedProf.tierType && cachedProf.tierType !== 'free') {
-          tierType = cachedProf.tierType;
-        } else {
-          tierType = 'pro_plus'; // safe default paid tier is basic pro, not VIP
-        }
+        tierType = serverTier === 'pro_vip' ? 'pro_vip' : 'pro_plus';
       }
 
-      const finalPaymentId = data.paymentId || data.razorpayPaymentId || data.payment_id || localPaymentId || (isPremium ? 'rzp_verified' : '');
-
-      // Auto-heal Firestore if client has verified payment but server doc is outdated
-      if (localHasVerified && (!data.isPremium || data.paymentStatus !== 'completed' || !data.paymentId)) {
-        try {
-          await sdk.firestoreMod.setDoc(docRef, {
-            isPremium: true,
-            tierType: tierType,
-            paymentStatus: 'completed',
-            paymentId: finalPaymentId,
-            autoHealedAt: sdk.firestoreMod.serverTimestamp(),
-          }, { merge: true });
-
-          // Also record in top-level 'payments' collection for easy analytics in Firebase Console
-          if (finalPaymentId) {
-            const payRef = sdk.firestoreMod.doc(sdk.db, "payments", finalPaymentId);
-            await sdk.firestoreMod.setDoc(payRef, {
-              paymentId: finalPaymentId,
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || '',
-              tierType: tierType,
-              paymentStatus: 'completed',
-              updatedAt: sdk.firestoreMod.serverTimestamp(),
-            }, { merge: true });
-          }
-        } catch(healErr){
-          console.warn('Auto-healing Firestore note:', healErr);
-        }
-      }
+      const finalPaymentId = data.paymentId || data.razorpayPaymentId || data.payment_id || '';
 
       const serverCount = parseInt(data.predictionsCount || '0', 10);
       const localCount = parseInt(localStorage.getItem('neet_predictions_count') || '0', 10);
@@ -750,10 +640,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('neet_auth_user', JSON.stringify(minUser));
 
       if (sdk.db && sdk.firestoreMod) {
-        const localIsPrem = typeof window !== 'undefined' && localStorage.getItem('neet_user_is_premium') === 'true';
-        const localTier = (typeof window !== 'undefined' && localStorage.getItem('neet_user_tier_type')) || (localIsPrem ? 'pro_vip' : 'free');
-        const localPayId = (typeof window !== 'undefined' && localStorage.getItem('neet_user_payment_id')) || '';
-
+        // New sign-ups ALWAYS start free. Entitlement is only granted server-side
+        // after a verified payment — never inherited from localStorage.
         const docRef = sdk.firestoreMod.doc(sdk.db, "users", fbUser.uid);
         await sdk.firestoreMod.setDoc(docRef, {
           uid: fbUser.uid,
@@ -763,10 +651,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           score: extra.score || '',
           category: extra.category || 'Open',
           state: extra.state || '',
-          isPremium: localIsPrem,
-          tierType: localIsPrem ? localTier : 'free',
-          paymentStatus: localIsPrem ? 'completed' : 'none',
-          paymentId: localPayId,
+          isPremium: false,
+          tierType: 'free',
+          paymentStatus: 'none',
+          paymentId: '',
           predictionsCount: 0,
           createdAt: sdk.firestoreMod.serverTimestamp(),
           lastLoginAt: sdk.firestoreMod.serverTimestamp(),
@@ -920,231 +808,168 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return nextCount;
   };
 
-  // Instant Verified Tier Upgrade
+  // Mirror a Server-Verified Tier.
+  // SECURITY: This function does NOT grant entitlement. It only reflects a tier
+  // that the trusted payment Worker / backend has ALREADY written to Firestore
+  // after verifying the Razorpay signature. It re-reads the server document and
+  // refuses to elevate if the server does not confirm the tier.
   const activateVerifiedTier = async (
-    tierType: 'pro_vip' | 'pro_plus', 
+    tierType: 'pro_vip' | 'pro_plus',
     paymentId: string,
     targetUid?: string
   ) => {
     if (!paymentId) return;
+
+    const effectiveUid = targetUid || user?.uid || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('neet_auth_user') || '{}')?.uid : null);
+    if (!effectiveUid) return;
+
+    // Re-read the authoritative server document. The backend must have set
+    // isPremium/tierType there; we never trust the caller-provided tier alone.
+    let serverTier: 'pro_vip' | 'pro_plus' | null = null;
+    const sdk = await getFirebaseSDK();
+    if (sdk?.db && sdk.firestoreMod) {
+      try {
+        const docRef = sdk.firestoreMod.doc(sdk.db, 'users', effectiveUid);
+        const snap = await sdk.firestoreMod.getDoc(docRef);
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.isPremium === true || d.tierType === 'pro_vip' || d.tierType === 'pro_plus') {
+            serverTier = d.tierType === 'pro_vip' ? 'pro_vip' : 'pro_plus';
+          }
+        }
+      } catch (e) {
+        console.warn('Server tier confirmation failed:', e);
+      }
+    }
+
+    if (!serverTier) {
+      // Server has not confirmed entitlement — do not grant anything.
+      console.warn('activateVerifiedTier: server did not confirm a paid tier; ignoring.');
+      return;
+    }
+
+    const confirmedTier = serverTier;
     const isPrem = true;
-    const cat = computeUserCategory(user, isPrem, tierType);
+    const cat = computeUserCategory(user, isPrem, confirmedTier);
+    const targetPlanKey = confirmedTier === 'pro_plus' ? 'basic' : 'season';
 
     const updated: UserProfile = {
       ...profile,
       isPremium: true,
-      tierType,
+      tierType: confirmedTier,
       paymentStatus: 'completed',
       paymentId,
       categoryTier: cat,
     };
 
     setProfile(updated);
-    localStorage.setItem('neet_user_tier_type', tierType);
-    localStorage.setItem('neet_user_is_premium', 'true');
-    localStorage.setItem('neet_user_payment_status', 'completed');
-    localStorage.setItem('neet_user_payment_id', paymentId);
     localStorage.setItem('neet_auth_profile', JSON.stringify(updated));
-
-    const effectiveUid = targetUid || user?.uid || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('neet_auth_user') || '{}')?.uid : null);
-    const targetPlanKey = tierType === 'pro_plus' ? 'basic' : 'season';
-
-    localStorage.setItem('neet_user_tier_type', tierType);
+    localStorage.setItem('neet_user_is_premium', 'true');
+    localStorage.setItem('neet_user_tier_type', confirmedTier);
     localStorage.setItem('neet_user_plan', targetPlanKey);
-    localStorage.setItem('neet_user_is_premium', 'true');
     localStorage.setItem('neet_user_payment_status', 'completed');
     localStorage.setItem('neet_user_payment_id', paymentId);
-    localStorage.setItem('neet_auth_profile', JSON.stringify(updated));
-
-    if (effectiveUid) {
-      localStorage.setItem(`neet_user_profile_${effectiveUid}`, JSON.stringify(updated));
-      localStorage.setItem(`neet_user_premium_${effectiveUid}`, 'true');
-      localStorage.setItem(`neet_user_tier_${effectiveUid}`, tierType);
-      localStorage.setItem(`neet_user_payment_id_${effectiveUid}`, paymentId);
-    }
-
-    // Append to permanent payment history ledger
-    try {
-      const histRaw = localStorage.getItem('neet_payment_history');
-      const hist = histRaw ? JSON.parse(histRaw) : [];
-      // Remove any duplicate with the same paymentId
-      const filteredHist = hist.filter((item: any) => item.paymentId !== paymentId);
-      filteredHist.push({
-        paymentId,
-        tierType,
-        tier: tierType,
-        planKey: targetPlanKey,
-        uid: effectiveUid || null,
-        timestamp: new Date().toISOString(),
-      });
-      localStorage.setItem('neet_payment_history', JSON.stringify(filteredHist));
-    } catch(e){}
+    localStorage.setItem(`neet_user_profile_${effectiveUid}`, JSON.stringify(updated));
+    localStorage.setItem(`neet_user_premium_${effectiveUid}`, 'true');
+    localStorage.setItem(`neet_user_tier_${effectiveUid}`, confirmedTier);
+    localStorage.setItem(`neet_user_payment_id_${effectiveUid}`, paymentId);
 
     // Update window.Auth as well
     if (typeof window !== 'undefined' && (window as any).Auth) {
       const winAuth = (window as any).Auth;
       winAuth.profile = updated;
-      if (typeof winAuth.activateVerifiedTier === 'function') {
-        try { winAuth.activateVerifiedTier(tierType, paymentId); } catch(e){}
-      }
       if (typeof winAuth._syncNavbarUI === 'function') {
         try { winAuth._syncNavbarUI(user); } catch(e){}
       }
     }
-
-    if (effectiveUid) {
-      const sdk = await getFirebaseSDK();
-      if (sdk?.db && sdk.firestoreMod) {
-        try {
-          const docRef = sdk.firestoreMod.doc(sdk.db, "users", effectiveUid);
-          await sdk.firestoreMod.setDoc(docRef, {
-            isPremium: true,
-            tierType,
-            paymentStatus: 'completed',
-            paymentId,
-            upgradedAt: sdk.firestoreMod.serverTimestamp(),
-          }, { merge: true });
-
-          // Also record in top-level 'payments' collection for Firebase Console analytics
-          if (paymentId) {
-            const payRef = sdk.firestoreMod.doc(sdk.db, "payments", paymentId);
-            await sdk.firestoreMod.setDoc(payRef, {
-              paymentId,
-              uid: effectiveUid,
-              email: user?.email || '',
-              displayName: user?.displayName || '',
-              tierType,
-              planKey: targetPlanKey,
-              amount: targetPlanKey === 'basic' ? 149 : 299,
-              amountPaise: targetPlanKey === 'basic' ? 14900 : 29900,
-              paymentStatus: 'completed',
-              createdAt: sdk.firestoreMod.serverTimestamp(),
-            }, { merge: true });
-          }
-        } catch(e){
-          console.warn('Firestore subscription activation warning:', e);
-        }
-      }
-    }
   };
 
-  // Restore / Re-verify Subscription (by past paymentId or local ledger) with exact tier detection & ZERO loopholes
+  // Restore / Re-verify Subscription.
+  // SECURITY: Restoration is authoritative ONLY from the server-written
+  // /payments/{paymentId} document (created by the payment Worker after
+  // signature verification). A caller-supplied plan or a localStorage ledger is
+  // NEVER sufficient to grant a tier.
   const restoreVerifiedSubscription = async (
     paymentIdInput?: string,
     requestedPlan?: 'basic' | 'season' | 'pro_plus' | 'pro_vip'
   ): Promise<{ success: boolean; message: string; tier?: 'pro_vip' | 'pro_plus'; planKey?: 'basic' | 'season' }> => {
     try {
       const cleanInput = paymentIdInput?.trim();
-      let targetPaymentId = cleanInput || 
-        localStorage.getItem('neet_user_payment_id') || 
-        (user?.uid ? localStorage.getItem(`neet_user_payment_id_${user.uid}`) : '') || 
-        '';
+      const targetPaymentId = cleanInput || '';
 
       if (!targetPaymentId) {
-        return { 
-          success: false, 
-          message: 'Please enter your Razorpay Payment ID from your email or SMS receipt (e.g. pay_xxxxxxxx).' 
+        return {
+          success: false,
+          message: 'Please enter your Razorpay Payment ID from your email or SMS receipt (e.g. pay_xxxxxxxx).'
         };
       }
 
       // Format validation: must be a legitimate transaction ID format (pay_ or rzp_)
       const isValidPaymentFormat = /^pay_[a-zA-Z0-9]{6,}$/.test(targetPaymentId) || targetPaymentId.startsWith('rzp_');
-      if (!isValidPaymentFormat && targetPaymentId.length < 10) {
+      if (!isValidPaymentFormat) {
         return {
           success: false,
           message: 'Invalid Payment ID format. Razorpay transaction IDs start with "pay_" (e.g. pay_Q1a2b3c4d5e6).',
         };
       }
 
-      // 1. Authoritative check in Firestore /payments/{targetPaymentId}
-      let firestorePlan: 'basic' | 'season' | null = null;
+      // Authoritative check: the payment must exist in the server-written
+      // /payments collection AND belong to the signed-in user.
       const sdk = await getFirebaseSDK();
-      if (sdk?.db && sdk.firestoreMod) {
-        try {
-          const payDocRef = sdk.firestoreMod.doc(sdk.db, 'payments', targetPaymentId);
-          const payDoc = await sdk.firestoreMod.getDoc(payDocRef);
-          if (payDoc.exists()) {
-            const pData = payDoc.data();
-            const amt = Number(pData.amount || 0);
-            const amtPaise = Number(pData.amountPaise || 0);
-            const pk = String(pData.planKey || pData.plan || '').toLowerCase();
-            const tt = String(pData.tierType || pData.tier || '').toLowerCase();
-
-            if (pk === 'basic' || tt === 'pro_plus' || tt === 'pro' || amt === 149 || amtPaise === 14900) {
-              firestorePlan = 'basic';
-            } else if (pk === 'season' || pk === 'upgrade' || tt === 'pro_vip' || amt === 299 || amt === 150 || amtPaise === 29900 || amtPaise === 15000) {
-              firestorePlan = 'season';
-            }
-          }
-        } catch (e) {
-          console.warn('Firestore payment lookup note:', e);
-        }
+      if (!sdk?.db || !sdk.firestoreMod) {
+        return { success: false, message: 'Verification service unavailable. Please try again in a moment.' };
       }
 
-      // 2. Check local payment ledger in browser
-      let matchedHistoryItem: any = null;
+      let serverPlan: 'basic' | 'season' | null = null;
       try {
-        const histRaw = localStorage.getItem('neet_payment_history');
-        if (histRaw) {
-          const hist = JSON.parse(histRaw);
-          if (Array.isArray(hist) && hist.length > 0) {
-            matchedHistoryItem = hist.find((h: any) => h.paymentId === targetPaymentId);
-          }
+        const payDocRef = sdk.firestoreMod.doc(sdk.db, 'payments', targetPaymentId);
+        const payDoc = await sdk.firestoreMod.getDoc(payDocRef);
+        if (!payDoc.exists()) {
+          return {
+            success: false,
+            message: 'No verified payment found for that ID. Please check the receipt from your email/SMS.',
+          };
         }
-      } catch (e) {}
+        const pData = payDoc.data();
 
-      let historyPlan: 'basic' | 'season' | null = null;
-      if (matchedHistoryItem) {
-        const hAmt = Number(matchedHistoryItem.amount || 0);
-        const hAmtPaise = Number(matchedHistoryItem.amountPaise || 0);
-        const hPk = String(matchedHistoryItem.planKey || matchedHistoryItem.plan || '').toLowerCase();
-        const hTt = String(matchedHistoryItem.tierType || matchedHistoryItem.tier || '').toLowerCase();
-
-        if (hPk === 'basic' || hTt === 'pro_plus' || hTt === 'pro' || hAmt === 149 || hAmtPaise === 14900) {
-          historyPlan = 'basic';
-        } else if (hPk === 'season' || hPk === 'upgrade' || hTt === 'pro_vip' || hAmt === 299 || hAmt === 150 || hAmtPaise === 29900 || hAmtPaise === 15000) {
-          historyPlan = 'season';
+        // Ownership check — a receipt can only be claimed by the user it belongs to.
+        if (user?.uid && pData.uid && pData.uid !== user.uid) {
+          return { success: false, message: 'That payment receipt belongs to a different account.' };
         }
+
+        const pk = String(pData.planKey || pData.plan || '').toLowerCase();
+        const tt = String(pData.tierType || pData.tier || '').toLowerCase();
+        const amt = Number(pData.amount || 0);
+        const amtPaise = Number(pData.amountPaise || 0);
+
+        if (pk === 'basic' || tt === 'pro_plus' || amt === 149 || amtPaise === 14900) {
+          serverPlan = 'basic';
+        } else if (pk === 'season' || pk === 'upgrade' || tt === 'pro_vip' || amt === 299 || amt === 150 || amtPaise === 29900 || amtPaise === 15000) {
+          serverPlan = 'season';
+        }
+      } catch (e) {
+        console.warn('Firestore payment lookup note:', e);
+        return { success: false, message: 'Could not verify the payment right now. Please try again.' };
       }
 
-      // 3. Resolve target tier with ZERO loopholes:
-      // STRICT RULES:
-      // A. If user requested Basic OR the receipt in Firestore/history is for Basic, it MUST ALWAYS be Basic (pro_plus).
-      //    Under NO circumstances will a Basic claim or receipt grant Season Pass VIP!
-      // B. Only if receipt is verified for Season Pass, OR user requested Season Pass without a Basic receipt, does it grant VIP.
-      // C. Safe default fallback is ALWAYS Basic Pass (pro_plus).
-      let targetTier: 'pro_plus' | 'pro_vip' = 'pro_plus';
-      let planKey: 'basic' | 'season' = 'basic';
-
-      if (requestedPlan === 'basic' || requestedPlan === 'pro_plus' || firestorePlan === 'basic' || historyPlan === 'basic') {
-        // Authoritative Basic Pass activation
-        targetTier = 'pro_plus';
-        planKey = 'basic';
-      } else if (firestorePlan === 'season' || (historyPlan === 'season' && matchedHistoryItem?.paymentId === targetPaymentId)) {
-        // Verified Season Pass VIP activation
-        targetTier = 'pro_vip';
-        planKey = 'season';
-      } else if (requestedPlan === 'season' || requestedPlan === 'pro_vip') {
-        // Explicit Season Pass VIP claim
-        targetTier = 'pro_vip';
-        planKey = 'season';
-      } else {
-        // Safe default fallback is ALWAYS Basic Pass (pro_plus)
-        targetTier = 'pro_plus';
-        planKey = 'basic';
+      if (!serverPlan) {
+        return { success: false, message: 'That payment record could not be matched to a valid pass.' };
       }
 
-      // 4. Activate the exact verified tier
+      const targetTier: 'pro_plus' | 'pro_vip' = serverPlan === 'basic' ? 'pro_plus' : 'pro_vip';
+      const planKey: 'basic' | 'season' = serverPlan;
+
+      // Mirror the server-verified tier (activates only if the server doc confirms it).
       await activateVerifiedTier(targetTier, targetPaymentId);
 
-      const passLabel = targetTier === 'pro_plus' 
-        ? 'Basic Counselling Pass (⚡ PRO Plus)' 
+      const passLabel = targetTier === 'pro_plus'
+        ? 'Basic Counselling Pass (⚡ PRO Plus)'
         : 'Season Counselling Pass (👑 PRO VIP)';
-      return { 
-        success: true, 
+      return {
+        success: true,
         tier: targetTier,
         planKey,
-        message: `${passLabel} successfully verified and activated!` 
+        message: `${passLabel} successfully verified and activated!`
       };
     } catch (err: any) {
       return { success: false, message: err?.message || 'Failed to restore subscription.' };

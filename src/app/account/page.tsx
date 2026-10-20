@@ -308,8 +308,7 @@ function AccountContent() {
       planKey,
       couponCode: couponDiscount > 0 ? couponCode : '',
       user,
-      onSuccess: async (paymentId) => {
-        const tier = planKey === 'basic' ? 'pro_plus' : 'pro_vip';
+      onSuccess: async ({ paymentId, tier }) => {
         await activateVerifiedTier(tier, paymentId);
         setCelebration({ open: true, planKey: planKey === 'upgrade' ? 'season' : planKey, paymentId });
       },

@@ -148,7 +148,16 @@
 
         if (cachedUser) {
           this.user = cachedUser;
-          this.profile = cachedProfile || this._loadLocalProfile(cachedUser);
+          const base = cachedProfile || this._loadLocalProfile(cachedUser);
+          // Entitlement is never trusted from cache — wait for server sync.
+          this.profile = {
+            ...base,
+            isPremium: false,
+            tierType: 'free',
+            paymentStatus: 'none',
+            paymentId: '',
+            categoryTier: this.getUserCategory({ user: cachedUser, isPremium: false, tierType: 'free' })
+          };
           this.isInitialized = true;
           this._syncNavbarUI(this.user);
           this._notifyListeners(this.user);
@@ -236,37 +245,12 @@
         const docRef = this.firestoreModule.doc(this.db, "users", user.uid);
         const docSnap = await this.firestoreModule.getDoc(docRef);
 
-        // Check local verified payment proof first to prevent overwriting
-        const localPremRaw = typeof window !== 'undefined' && localStorage.getItem('neet_user_is_premium') === 'true';
-        const userPremRaw = typeof window !== 'undefined' && localStorage.getItem(`neet_user_premium_${user.uid}`) === 'true';
-        const localPaymentId = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_payment_id') || localStorage.getItem(`neet_user_payment_id_${user.uid}`) || '') : '';
-        const localPaymentStatus = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_payment_status') || '') : '';
-        const localTierType = typeof window !== 'undefined' ? (localStorage.getItem('neet_user_tier_type') || localStorage.getItem(`neet_user_tier_${user.uid}`) || '') : '';
-
-        let cachedProf = {};
-        try {
-          const raw = localStorage.getItem('neet_auth_profile') || localStorage.getItem(`neet_user_profile_${user.uid}`);
-          if (raw) cachedProf = JSON.parse(raw);
-        } catch(e){}
-
-        let hasHistoryPayment = false;
-        try {
-          const histRaw = localStorage.getItem('neet_payment_history');
-          if (histRaw) {
-            const hist = JSON.parse(histRaw);
-            if (Array.isArray(hist) && hist.length > 0) hasHistoryPayment = true;
-          }
-        } catch(e){}
-
-        const localHasVerified = Boolean(
-          (localPremRaw || userPremRaw || cachedProf.isPremium || hasHistoryPayment) &&
-          (localPaymentStatus === 'completed' || localPaymentId || hasHistoryPayment || (localTierType && localTierType !== 'free') || (cachedProf.tierType && cachedProf.tierType !== 'free'))
-        );
-
         let data = {};
         if (docSnap.exists()) {
           data = docSnap.data();
         } else {
+          // New profile documents ALWAYS start free. Entitlement is only granted
+          // by the trusted backend after Razorpay signature verification.
           const localCache = this._loadLocalProfile(user);
           data = {
             uid: user.uid,
@@ -275,10 +259,10 @@
             rank: localCache.rank || '',
             category: localCache.category || 'Open',
             state: localCache.state || '',
-            isPremium: localHasVerified,
-            tierType: localHasVerified ? (localTierType || 'pro_plus') : 'free',
-            paymentStatus: localHasVerified ? 'completed' : 'none',
-            paymentId: localHasVerified ? (localPaymentId || 'rzp_verified') : '',
+            isPremium: false,
+            tierType: 'free',
+            paymentStatus: 'none',
+            paymentId: '',
             predictionsCount: parseInt(localStorage.getItem('neet_predictions_count') || '0', 10),
             source: 'website',
             platform: 'web',
@@ -293,63 +277,23 @@
         }
 
         // Resilient server-side payment verification
+        const finalPaymentId = data.paymentId || data.razorpayPaymentId || data.payment_id || '';
+
+        // Entitlement is derived ONLY from the server document written by the
+        // trusted backend. Client-provided premium flags are ignored.
         const serverIsPremium = Boolean(
           data.isPremium === true ||
-          data.isPremium === 'true' ||
           data.tierType === 'pro_vip' ||
-          data.tierType === 'pro_plus' ||
-          data.premiumTier === 'pro_vip' ||
-          data.premiumTier === 'pro_plus' ||
-          ((data.paymentStatus === 'completed' || data.paymentStatus === 'paid' || data.paymentStatus === 'captured' || data.paymentStatus === 'active') && (data.paymentId || data.razorpayPaymentId))
+          data.tierType === 'pro_plus'
         );
 
-        const serverTier = data.tierType || data.premiumTier || (data.plan === 'basic' ? 'pro_plus' : data.plan === 'season' ? 'pro_vip' : undefined);
+        const serverTier = data.tierType || (data.plan === 'basic' ? 'pro_plus' : data.plan === 'season' ? 'pro_vip' : undefined);
 
-        // Never demote a verified paying user
-        const isPremium = Boolean(serverIsPremium || localHasVerified);
+        const isPremium = serverIsPremium;
 
         let tierType = 'free';
         if (isPremium) {
-          const planStored = localStorage.getItem('neet_user_plan');
-          if (serverTier === 'pro_plus' || localTierType === 'pro_plus' || planStored === 'basic') {
-            tierType = 'pro_plus';
-          } else if (serverTier === 'pro_vip' || localTierType === 'pro_vip' || planStored === 'season') {
-            tierType = 'pro_vip';
-          } else if (cachedProf.tierType && cachedProf.tierType !== 'free') {
-            tierType = cachedProf.tierType;
-          } else {
-            tierType = 'pro_plus';
-          }
-        }
-
-        const finalPaymentId = data.paymentId || data.razorpayPaymentId || data.payment_id || localPaymentId || (isPremium ? 'rzp_verified' : '');
-
-        // Auto-heal Firestore if client has verified payment but Firestore is missing it
-        if (localHasVerified && (!data.isPremium || data.paymentStatus !== 'completed' || !data.paymentId)) {
-          try {
-            await this.firestoreModule.setDoc(docRef, {
-              isPremium: true,
-              tierType: tierType,
-              paymentStatus: 'completed',
-              paymentId: finalPaymentId,
-              autoHealedAt: this.firestoreModule.serverTimestamp()
-            }, { merge: true });
-
-            if (finalPaymentId) {
-              const payDocRef = this.firestoreModule.doc(this.db, "payments", finalPaymentId);
-              await this.firestoreModule.setDoc(payDocRef, {
-                paymentId: finalPaymentId,
-                uid: user.uid,
-                email: user.email || '',
-                displayName: user.displayName || '',
-                tierType: tierType,
-                paymentStatus: 'completed',
-                updatedAt: this.firestoreModule.serverTimestamp()
-              }, { merge: true });
-            }
-          } catch(healErr) {
-            console.warn("Firestore auto-heal warning:", healErr);
-          }
+          tierType = serverTier === 'pro_vip' ? 'pro_vip' : 'pro_plus';
         }
 
         // Sync predictions count from Firestore or local
@@ -402,22 +346,10 @@
       const stored = localStorage.getItem(user ? `neet_user_profile_${user.uid}` : 'neet_auth_profile') || localStorage.getItem('neet_auth_profile');
       let prof = stored ? JSON.parse(stored) : {};
 
-      const localPremRaw = localStorage.getItem('neet_user_is_premium') === 'true';
-      const userPremRaw = user ? localStorage.getItem(`neet_user_premium_${user.uid}`) === 'true' : false;
-      const paymentIdRaw = localStorage.getItem('neet_user_payment_id') || (user ? localStorage.getItem(`neet_user_payment_id_${user.uid}`) : '') || '';
-      const tierTypeRaw = localStorage.getItem('neet_user_tier_type') || (user ? localStorage.getItem(`neet_user_tier_${user.uid}`) : '') || '';
-
-      const isPremium = Boolean(prof.isPremium || localPremRaw || userPremRaw || (paymentIdRaw && paymentIdRaw.startsWith('rzp_')));
-      let tierType = 'free';
-      if (isPremium) {
-        if (tierTypeRaw && tierTypeRaw !== 'free') {
-          tierType = tierTypeRaw;
-        } else if (prof.tierType && prof.tierType !== 'free') {
-          tierType = prof.tierType;
-        } else {
-          tierType = 'pro_plus';
-        }
-      }
+      // Entitlement is NEVER read from localStorage — it is resolved from the
+      // server document by syncProfileFromFirestore after login.
+      const isPremium = false;
+      const tierType = 'free';
 
       const predictionsCount = parseInt(prof.predictionsCount || localStorage.getItem('neet_predictions_count') || '0', 10);
 
@@ -433,27 +365,23 @@
         state: prof.state || localStorage.getItem('neet_user_state') || '',
         tierType: tierType,
         isPremium: isPremium,
-        paymentStatus: isPremium ? 'completed' : 'none',
-        paymentId: prof.paymentId || paymentIdRaw || '',
+        paymentStatus: 'none',
+        paymentId: '',
         predictionsCount: predictionsCount,
         categoryTier: this.getUserCategory({ user, isPremium, tierType }),
         createdAt: new Date().toISOString()
       };
     },
 
-    // ── User Category Categorization Engine (Paid Only vs Free/Guest) ──
+    // ── User Category Categorization Engine ──
+    // NOTE: `isPremium`/`tierType` must only ever originate from the server.
     getUserCategory(override) {
       const user = override ? override.user : this.user;
-      const prof = this.profile || override || {};
-      const isPremium = Boolean(
-        prof.isPremium || 
-        (override && override.isPremium) ||
-        localStorage.getItem('neet_user_is_premium') === 'true' || 
-        (user && localStorage.getItem(`neet_user_premium_${user.uid}`) === 'true')
-      );
-      const tierType = ((override && override.tierType) || prof.tierType || (user && localStorage.getItem(`neet_user_tier_${user.uid}`)) || localStorage.getItem('neet_user_tier_type') || 'free').toLowerCase();
+      const prof = override || this.profile || {};
+      const isPremium = Boolean(override ? override.isPremium : prof.isPremium);
+      const tierType = String(override ? override.tierType : (prof.tierType || 'free')).toLowerCase();
 
-      // Only grant Pro if actually paid & verified
+      // Only grant Pro if actually paid & verified server-side
       if (isPremium) {
         const isVipTier = tierType === 'pro_vip' || tierType === 'season' || tierType === 'vip' || tierType === 'upgrade';
         if (isVipTier) {
@@ -634,18 +562,15 @@
       };
       this.user = minUser;
       localStorage.setItem('neet_auth_user', JSON.stringify(minUser));
-      
-      const localPrem = localStorage.getItem('neet_user_is_premium') === 'true';
-      const localTier = localStorage.getItem('neet_user_tier_type') || (localPrem ? 'pro_plus' : 'free');
-      const localPayId = localStorage.getItem('neet_user_payment_id') || '';
 
+      // New accounts ALWAYS start free — entitlement comes from the server only.
       const newProf = {
         displayName: displayName || (user.email ? user.email.split('@')[0] : 'Candidate'),
         email: user.email,
-        tierType: localPrem ? localTier : 'free',
-        isPremium: localPrem,
-        paymentStatus: localPrem ? 'completed' : 'none',
-        paymentId: localPayId,
+        tierType: 'free',
+        isPremium: false,
+        paymentStatus: 'none',
+        paymentId: '',
         ...extraData
       };
       const loaded = this._loadLocalProfile(user);
@@ -824,42 +749,46 @@
       }
     },
 
+    // SECURITY: Mirror a Server-Verified Tier only. This never grants
+    // entitlement — the trusted backend must have already written the tier to
+    // Firestore after Razorpay signature verification.
     async activateVerifiedTier(tierType, paymentId) {
       if (!paymentId) return;
-      const isPrem = true;
-      const tier = tierType || 'pro_plus';
+
+      const uid = this.user ? this.user.uid : null;
+      if (!uid || !this.db || !this.firestoreModule) return;
+
+      // Re-read the authoritative server document.
+      let serverTier = null;
+      try {
+        const docRef = this.firestoreModule.doc(this.db, "users", uid);
+        const snap = await this.firestoreModule.getDoc(docRef);
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.isPremium === true || d.tierType === 'pro_vip' || d.tierType === 'pro_plus') {
+            serverTier = d.tierType === 'pro_vip' ? 'pro_vip' : 'pro_plus';
+          }
+        }
+      } catch (e) {
+        console.warn("Server tier confirmation failed:", e);
+      }
+
+      if (!serverTier) {
+        console.warn("activateVerifiedTier: server did not confirm a paid tier; ignoring.");
+        return;
+      }
+
+      const tier = serverTier;
+      const cleanPlanKey = (tier === 'pro_plus') ? 'basic' : 'season';
+
       localStorage.setItem('neet_user_tier_type', tier);
       localStorage.setItem('neet_user_is_premium', 'true');
       localStorage.setItem('neet_user_payment_status', 'completed');
       localStorage.setItem('neet_user_payment_id', paymentId);
-
-      const uid = this.user ? this.user.uid : null;
-      if (uid) {
-        localStorage.setItem(`neet_user_premium_${uid}`, 'true');
-        localStorage.setItem(`neet_user_tier_${uid}`, tier);
-        localStorage.setItem(`neet_user_payment_id_${uid}`, paymentId);
-      }
-
-      const cleanPlanKey = (tier === 'pro_plus' || tier === 'basic') ? 'basic' : 'season';
       localStorage.setItem('neet_user_plan', cleanPlanKey);
-
-      // Append to permanent payment history ledger
-      try {
-        const histRaw = localStorage.getItem('neet_payment_history');
-        const hist = histRaw ? JSON.parse(histRaw) : [];
-        const filteredHist = hist.filter(item => item.paymentId !== paymentId);
-        filteredHist.push({
-          paymentId: paymentId,
-          tierType: tier,
-          tier: tier,
-          planKey: cleanPlanKey,
-          amount: cleanPlanKey === 'basic' ? 149 : 299,
-          amountPaise: cleanPlanKey === 'basic' ? 14900 : 29900,
-          uid: uid,
-          timestamp: new Date().toISOString()
-        });
-        localStorage.setItem('neet_payment_history', JSON.stringify(filteredHist));
-      } catch(e){}
+      localStorage.setItem(`neet_user_premium_${uid}`, 'true');
+      localStorage.setItem(`neet_user_tier_${uid}`, tier);
+      localStorage.setItem(`neet_user_payment_id_${uid}`, paymentId);
 
       if (this.profile) {
         this.profile.isPremium = true;
@@ -869,40 +798,7 @@
         this.profile.categoryTier = this.getUserCategory({ user: this.user, isPremium: true, tierType: tier });
       }
       localStorage.setItem('neet_auth_profile', JSON.stringify(this.profile || {}));
-      if (uid) {
-        localStorage.setItem(`neet_user_profile_${uid}`, JSON.stringify(this.profile || {}));
-      }
-
-      if (this.user && this.db && this.firestoreModule) {
-        try {
-          const docRef = this.firestoreModule.doc(this.db, "users", this.user.uid);
-          await this.firestoreModule.setDoc(docRef, {
-            isPremium: true,
-            tierType: tier,
-            paymentStatus: 'completed',
-            paymentId: paymentId,
-            upgradedAt: this.firestoreModule.serverTimestamp()
-          }, { merge: true });
-
-          if (paymentId) {
-            const payDocRef = this.firestoreModule.doc(this.db, "payments", paymentId);
-            await this.firestoreModule.setDoc(payDocRef, {
-              paymentId: paymentId,
-              uid: this.user.uid,
-              email: this.user.email || '',
-              displayName: this.user.displayName || '',
-              tierType: tier,
-              planKey: cleanPlanKey,
-              amount: cleanPlanKey === 'basic' ? 149 : 299,
-              amountPaise: cleanPlanKey === 'basic' ? 14900 : 29900,
-              paymentStatus: 'completed',
-              createdAt: this.firestoreModule.serverTimestamp()
-            }, { merge: true });
-          }
-        } catch(e) {
-          console.warn("Firestore update in activateVerifiedTier:", e);
-        }
-      }
+      localStorage.setItem(`neet_user_profile_${uid}`, JSON.stringify(this.profile || {}));
 
       this._syncNavbarUI(this.user);
       this._notifyListeners(this.user);
