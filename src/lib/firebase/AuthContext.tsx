@@ -102,7 +102,7 @@ export function computeUserCategory(
       canAccessWishlist: false,
       canAccessChoiceFiller: false,
       unlimited: false,
-      freeLimit: 5,
+      freeLimit: 1,
     };
   }
 
@@ -763,9 +763,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         allowed: false,
         reason: 'REGISTER_REQUIRED',
         remaining: 0,
-        limit: 5,
+        limit: 1,
         current: 0,
-        message: 'Candidate login is required to claim your 5 Free AI Predictions! Sign in or register in seconds to begin.',
+        message: 'Candidate login is required to claim your 1 Free AI Prediction! Sign in or register in seconds to begin.',
         tier: cat,
       };
     }
@@ -774,7 +774,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { allowed: true, remaining: Infinity, limit: Infinity, current, tier: cat };
     }
 
-    const limit = cat.freeLimit || 5;
+    const limit = cat.freeLimit ?? 1;
     if (current < limit) {
       return { allowed: true, remaining: limit - current, limit, current, tier: cat };
     }
@@ -785,7 +785,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       remaining: 0,
       limit,
       current,
-      message: 'You have completed all 5 free trial predictions. Unlock unlimited AI predictions and full cutoff forecasts with a Basic Pass (₹149) or Season Pass (₹299)!',
+      message: 'You have used your 1 free trial prediction. Unlock unlimited AI predictions and full cutoff forecasts with a Basic Pass (₹149) or Season Pass (₹299)!',
       tier: cat,
     };
   };
@@ -825,20 +825,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Re-read the authoritative server document. The backend must have set
     // isPremium/tierType there; we never trust the caller-provided tier alone.
+    // Use a server-forced read and retry briefly to absorb any write latency
+    // between the Worker committing the entitlement and this read.
     let serverTier: 'pro_vip' | 'pro_plus' | null = null;
     const sdk = await getFirebaseSDK();
     if (sdk?.db && sdk.firestoreMod) {
-      try {
-        const docRef = sdk.firestoreMod.doc(sdk.db, 'users', effectiveUid);
-        const snap = await sdk.firestoreMod.getDoc(docRef);
-        if (snap.exists()) {
-          const d = snap.data();
-          if (d.isPremium === true || d.tierType === 'pro_vip' || d.tierType === 'pro_plus') {
-            serverTier = d.tierType === 'pro_vip' ? 'pro_vip' : 'pro_plus';
+      for (let attempt = 0; attempt < 4 && !serverTier; attempt++) {
+        try {
+          const docRef = sdk.firestoreMod.doc(sdk.db, 'users', effectiveUid);
+          const snap = sdk.firestoreMod.getDocFromServer
+            ? await sdk.firestoreMod.getDocFromServer(docRef)
+            : await sdk.firestoreMod.getDoc(docRef);
+          if (snap.exists()) {
+            const d = snap.data();
+            if (d.isPremium === true || d.tierType === 'pro_vip' || d.tierType === 'pro_plus') {
+              serverTier = d.tierType === 'pro_vip' ? 'pro_vip' : 'pro_plus';
+            }
           }
+        } catch (e) {
+          console.warn('Server tier confirmation attempt failed:', e);
         }
-      } catch (e) {
-        console.warn('Server tier confirmation failed:', e);
+        if (!serverTier && attempt < 3) {
+          await new Promise((r) => setTimeout(r, 700));
+        }
       }
     }
 
@@ -976,8 +985,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Instant Demo Candidate Login (for local testing & verification)
+  // Instant Demo Candidate Login (development only — disabled in production)
   const signInAsDemoCandidate = async (tier: 'free' | 'pro_plus' | 'pro_vip' = 'pro_vip'): Promise<FirebaseUser> => {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Demo login is disabled in production.');
+    }
     const isPremium = tier.startsWith('pro');
     const demoUid = 'demo_user_' + Math.random().toString(36).substring(2, 7);
     const minUser: FirebaseUser = {

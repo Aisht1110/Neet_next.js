@@ -138,7 +138,7 @@ export const PredictionLimitModal: React.FC<PredictionLimitModalProps> = ({
               className="w-full p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
             >
               <UserPlus className="h-4 w-4 text-teal-400" />
-              <span>Sign In with Google for 5 Free Runs</span>
+              <span>Sign In with Google for 1 Free Run</span>
             </Link>
           )}
         </div>

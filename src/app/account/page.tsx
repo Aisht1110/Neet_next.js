@@ -72,6 +72,8 @@ function AccountContent() {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [securityMsg, setSecurityMsg] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -261,13 +263,14 @@ function AccountContent() {
     if (!resetEmail) return;
     try {
       await resetPassword(resetEmail);
+      setResetError('');
       setResetSuccess(true);
       setTimeout(() => {
         setResetSuccess(false);
         setResetModalOpen(false);
       }, 3000);
     } catch (err: any) {
-      alert(err.message || 'Failed to send password reset email.');
+      setResetError(err.message || 'Failed to send password reset email.');
     }
   };
 
@@ -341,7 +344,7 @@ function AccountContent() {
             <p className="text-sm text-slate-500 dark:text-white/55 mt-2 leading-relaxed">
               {authMode === 'login'
                 ? 'Sign in to access your predictions, saved colleges, and counselling data.'
-                : 'Create your free account and get 5 AI predictions instantly — no card required.'}
+                : 'Create your free account and get 1 free AI prediction instantly — no card required.'}
             </p>
           </div>
 
@@ -548,7 +551,7 @@ function AccountContent() {
                       <ShieldCheck className="h-3 w-3 text-emerald-500" /> No credit card needed
                     </span>
                     <span className="text-[10px] text-slate-400 dark:text-white/30 flex items-center gap-1">
-                      <Sparkles className="h-3 w-3 text-teal-400" /> 5 free AI predictions
+                      <Sparkles className="h-3 w-3 text-teal-400" /> 1 free AI prediction
                     </span>
                   </div>
                 </form>
@@ -776,7 +779,7 @@ function AccountContent() {
                     <div className="p-3.5 rounded-2xl bg-slate-100/80 dark:bg-white/5 border border-slate-200 dark:border-white/5">
                       <span className="text-slate-500 dark:text-white/50 block mb-1 font-semibold">Prediction Quota</span>
                       <strong className="text-sm font-black text-teal-700 dark:text-teal-300">
-                        {tierCategory.unlimited ? 'Unlimited AI Runs' : `${profile.predictionsCount} used / 5 free`}
+                        {tierCategory.unlimited ? 'Unlimited AI Runs' : `${profile.predictionsCount} used / 1 free`}
                       </strong>
                     </div>
 
@@ -1497,7 +1500,7 @@ function AccountContent() {
                         <span className="text-[10px] text-slate-500 font-mono">5 Runs</span>
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-white/50">
-                        5 free predictions; Wishlist &amp; Choice Sequencer locked.
+                        1 free prediction; Wishlist &amp; Choice Sequencer locked.
                       </p>
                     </button>
 
@@ -1679,13 +1682,20 @@ function AccountContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (user.email) resetPassword(user.email).then(() => alert(`Password reset link sent to ${user.email}`));
+                      if (user.email) {
+                        resetPassword(user.email)
+                          .then(() => setSecurityMsg(`Password reset link sent to ${user.email}`))
+                          .catch((e: any) => setSecurityMsg(e?.message || 'Failed to send reset email.'));
+                      }
                     }}
                     className="px-3.5 py-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 text-teal-800 dark:text-teal-300 text-xs font-bold hover:bg-teal-500/20 cursor-pointer"
                   >
                     Send Email
                   </button>
                 </div>
+                {securityMsg && (
+                  <p className="mt-2 text-[11px] font-semibold text-teal-700 dark:text-teal-300">{securityMsg}</p>
+                )}
 
                 <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20 flex items-center justify-between">
                   <div>

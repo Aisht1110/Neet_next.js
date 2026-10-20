@@ -37,7 +37,8 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   const isProPlus = tierCategory.type === 'pro_plus' || profile?.tierType === 'pro_plus';
   const [couponCode, setCouponCode] = useState(isProPlus ? '' : 'NEETPRO');
   const [couponStatus, setCouponStatus] = useState('');
-  const [discount, setDiscount] = useState(isProPlus ? 0 : 50); // Default ₹50 off with NEETPRO for fresh purchases
+  // No discount is applied until the Worker validates a real coupon.
+  const [discount, setDiscount] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {

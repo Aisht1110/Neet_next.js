@@ -25,22 +25,13 @@ export async function getCollegeData(): Promise<{
 
   fetchPromise = (async () => {
     try {
-      const DATA_VERSION = 'all_rounds_v5_' + Date.now();
+      // Version is fixed at build time (see next.config / .env) so the browser
+      // and CDN can actually cache these large JSON files. Bump
+      // NEXT_PUBLIC_DATA_VERSION when the datasets change.
+      const DATA_VERSION = process.env.NEXT_PUBLIC_DATA_VERSION || 'v5';
       const [cutoffsRes, collegesRes] = await Promise.all([
-        fetch(`/data/cutoffs.json?v=${DATA_VERSION}`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        }),
-        fetch(`/data/colleges.json?v=${DATA_VERSION}`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        }).catch(() => null)
+        fetch(`/data/cutoffs.json?v=${DATA_VERSION}`),
+        fetch(`/data/colleges.json?v=${DATA_VERSION}`).catch(() => null)
       ]);
 
       if (!cutoffsRes.ok) {

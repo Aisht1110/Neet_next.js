@@ -34,6 +34,7 @@ import { CutoffModal, CutoffModalCollegeData } from '@/components/predictor/Cuto
 import { CardCutoffInline } from '@/components/predictor/CardCutoffInline';
 import { UpgradeModal } from '@/components/common/UpgradeModal';
 import { BrandIcon } from '@/components/common/BrandIcon';
+import { STATS } from '@/lib/constants';
 
 export default function CollegesPage() {
   const [index, setIndex] = useState<Map<string, CollegeIndexEntry> | null>(null);
@@ -228,7 +229,7 @@ export default function CollegesPage() {
                 <span>OFFICIAL MEDICAL COLLEGES DIRECTORY</span>
               </div>
               <h1 className="hero-title text-2xl sm:text-3xl font-black">
-                700+ Medical Colleges & <span className="text-gradient">Fee Explorer</span>
+                {STATS.colleges} Medical Colleges & <span className="text-gradient">Fee Explorer</span>
               </h1>
               <p className="hero-sub">
                 Explore annual tuition fees, state rural bonds, monthly stipends, and internal PG quotas across all Indian institutions.
@@ -242,7 +243,7 @@ export default function CollegesPage() {
 
             <div className="hero-stats-row hidden sm:flex">
               <div className="hs-item">
-                <div className="hs-val">{uniqueColleges.length || '700+'}</div>
+                <div className="hs-val">{uniqueColleges.length || STATS.colleges}</div>
                 <div className="hs-lbl">Institutions</div>
               </div>
               <div className="hs-item">

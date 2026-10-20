@@ -1,7 +1,8 @@
 import React from 'react';
 import Link from 'next/link';
-import { Shield, ExternalLink, Mail, Phone } from 'lucide-react';
+import { Shield, ExternalLink } from 'lucide-react';
 import { BrandIcon } from '@/components/common/BrandIcon';
+import { STATS, SITE } from '@/lib/constants';
 
 export const Footer: React.FC = () => {
   return (
@@ -21,7 +22,7 @@ export const Footer: React.FC = () => {
               </div>
             </Link>
             <p className="text-slate-500 dark:text-white/60 text-xs leading-relaxed max-w-sm mb-4">
-              Comprehensive AI-assisted college predictor, choice filling optimizer, and cutoff analysis tool built on 70,000+ verified MCC allotment records from NEET 2024 &amp; 2025.
+              Comprehensive AI-assisted college predictor, choice filling optimizer, and cutoff analysis tool built on {STATS.allotmentsShort} verified MCC allotment records from NEET {STATS.dataYears}.
             </p>
             <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-white/50">
               <Shield className="h-3.5 w-3.5 text-teal-500 dark:text-teal-400" />
@@ -34,7 +35,7 @@ export const Footer: React.FC = () => {
             <h4 className="font-bold text-teal-600 dark:text-teal-400 mb-4 text-xs uppercase tracking-wider">Tools &amp; Predictor</h4>
             <ul className="space-y-2.5 text-xs">
               <li><Link href="/predict" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">College Predictor</Link></li>
-              <li><Link href="/colleges" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">700+ Medical Colleges</Link></li>
+              <li><Link href="/colleges" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">{STATS.colleges} Medical Colleges</Link></li>
               <li><Link href="/choice-fill" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Smart Choice Filling</Link></li>
               <li><Link href="/wishlist" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">My Saved Wishlist</Link></li>
               <li><Link href="/account" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">My Profile &amp; Quotas</Link></li>
@@ -72,9 +73,9 @@ export const Footer: React.FC = () => {
             <h4 className="font-bold text-purple-600 dark:text-purple-400 mb-4 text-xs uppercase tracking-wider">Support &amp; Legal</h4>
             <ul className="space-y-2.5 text-xs">
               <li><Link href="/support" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Help &amp; Contact</Link></li>
-              <li><Link href="/support#refund" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Refund Policy</Link></li>
-              <li><Link href="/support#privacy" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/support#terms" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Terms of Service</Link></li>
+              <li><Link href="/refund" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Refund Policy</Link></li>
+              <li><Link href="/privacy" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="text-slate-500 dark:text-white/70 hover:text-teal-600 dark:hover:text-white transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>

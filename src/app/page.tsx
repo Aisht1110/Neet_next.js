@@ -11,7 +11,6 @@ import {
   Target,
   Flame,
   ArrowRight,
-  Star,
   Send,
   Crown,
   Check,
@@ -30,6 +29,7 @@ import { useAuth } from '@/lib/firebase/AuthContext';
 import { initiateCheckout, validateCoupon } from '@/lib/payment/paymentService';
 import { PaymentCelebrationModal } from '@/components/payment/PaymentCelebrationModal';
 import { ProCandidateDashboard } from '@/components/dashboard/ProCandidateDashboard';
+import { STATS } from '@/lib/constants';
 
 export default function HomePage() {
   const router = useRouter();
@@ -181,33 +181,6 @@ export default function HomePage() {
     { step: '02', icon: '⚙️', title: 'Run Predictive Engine', desc: 'Our algorithm cross-references 70,858 verified MCC seat allotment records across all rounds, quotas, and state bodies.' },
     { step: '03', icon: '🎯', title: 'Review Ranked Matches', desc: 'Inspect college predictions organized into 4 strategic pillars (Safety, Target, Reach, Long Shot) with bond & fee data.' },
     { step: '04', icon: '📋', title: 'Export Choice Filling List', desc: 'Add top institutions to your wishlist, arrange your preferred priority sequence, and export the official MCC order.' },
-  ];
-
-  const testimonials = [
-    {
-      quote: 'The 4-pillar classification helped me secure my Round 2 upgrade at MAMC New Delhi. The historical 2-year cutoff shift data was 100% accurate.',
-      name: 'Dr. Ananya Sharma',
-      rank: 'AIR 642',
-      college: 'MAMC New Delhi',
-      avatar: 'A',
-      color: 'from-teal-400 to-cyan-500',
-    },
-    {
-      quote: 'Reserved category Open seat evaluation is a lifesaver. Most predictors misled me, but this accurately showed both my OBC rank and UR cutoff margins.',
-      name: 'Rohan Verma',
-      rank: 'AIR 4,820',
-      college: 'KGMU Lucknow',
-      avatar: 'R',
-      color: 'from-blue-400 to-indigo-500',
-    },
-    {
-      quote: 'The Smart Choice Filling tool exported my list in strict priority order. I entered it directly into the MCC portal and was allotted GMC Chandigarh in Round 1!',
-      name: 'Pooja Deshmukh',
-      rank: 'AIR 1,180',
-      college: 'GMCH Chandigarh',
-      avatar: 'P',
-      color: 'from-purple-400 to-pink-500',
-    },
   ];
 
   const faqs = [
@@ -913,42 +886,44 @@ export default function HomePage() {
       </section>
 
       {/* ═══════════════════════════════════════════════
-          SECTION 8 — TESTIMONIALS
+          SECTION 8 — DATA & METHODOLOGY (replaces unverified testimonials)
       ═══════════════════════════════════════════════ */}
       <section className="relative z-10 py-16 sm:py-24">
         <div className="container-custom">
           <div className="text-center mb-12">
-            <div className="sec-label">Student Experiences</div>
+            <div className="sec-label">Data &amp; Methodology</div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-950 dark:text-white tracking-tight mb-3 font-heading">
-              Trusted by Doctors &amp; Top Aspirants
+              Grounded in Official Allotment Data
             </h2>
             <p className="text-slate-600 dark:text-white/60 text-sm sm:text-base max-w-xl mx-auto">
-              Real testimonials from students who navigated NEET counselling successfully.
+              No manufactured reviews. Here is exactly what powers every prediction.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {testimonials.map((t, idx) => (
-              <div key={idx} className="glass-panel p-6 sm:p-8 flex flex-col justify-between hover:border-teal-400/30 transition-all duration-300">
-                <div>
-                  <div className="flex items-center gap-1 text-amber-500 dark:text-amber-400 mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-amber-500 dark:fill-amber-400" />
-                    ))}
-                  </div>
-                  <p className="text-sm text-slate-700 dark:text-white/80 leading-relaxed italic mb-6">
-                    &ldquo;{t.quote}&rdquo;
-                  </p>
+            {[
+              {
+                icon: <TrendingUp className="h-6 w-6" />,
+                title: `${STATS.allotments} Verified Allotments`,
+                desc: `Every prediction is derived from official MCC NEET ${STATS.dataYears} round-by-round seat allotment records — no synthetic or estimated percentages.`,
+              },
+              {
+                icon: <Building2 className="h-6 w-6" />,
+                title: `${STATS.colleges} Colleges Indexed`,
+                desc: 'Government, AIIMS, JIPMER, central, and deemed medical & dental institutions across all states and UTs.',
+              },
+              {
+                icon: <ShieldCheck className="h-6 w-6" />,
+                title: 'Transparent Round-by-Round Logic',
+                desc: 'Cutoffs, quotas, categories, bonds and fees are shown with their source rounds so you can audit every number yourself.',
+              },
+            ].map((t, idx) => (
+              <div key={idx} className="glass-panel p-6 sm:p-8 flex flex-col hover:border-teal-400/30 transition-all duration-300">
+                <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-700 dark:text-teal-300 flex items-center justify-center mb-5">
+                  {t.icon}
                 </div>
-                <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-white/10">
-                  <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${t.color} text-slate-950 font-black text-sm flex items-center justify-center shrink-0 shadow-md`}>
-                    {t.avatar}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-950 dark:text-white">{t.name}</h4>
-                    <p className="text-xs text-teal-700 dark:text-teal-300 font-mono font-bold">{t.rank} · {t.college}</p>
-                  </div>
-                </div>
+                <h4 className="text-base font-bold text-slate-950 dark:text-white mb-2 font-heading">{t.title}</h4>
+                <p className="text-sm text-slate-600 dark:text-white/70 leading-relaxed">{t.desc}</p>
               </div>
             ))}
           </div>
@@ -975,7 +950,7 @@ export default function HomePage() {
               </div>
             </div>
             <a
-              href="https://t.me"
+              href={process.env.NEXT_PUBLIC_TELEGRAM_URL || 'https://t.me/neetcounselling'}
               target="_blank"
               rel="noreferrer"
               className="px-6 py-3 rounded-full bg-[#0088cc] hover:bg-[#0099e6] !text-white font-extrabold text-sm flex items-center gap-2 shadow-lg transition-all shrink-0"

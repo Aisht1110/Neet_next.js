@@ -420,7 +420,7 @@
         };
       }
 
-      // Type 3: 👤 Free Registered Member (5 Free Predictions)
+      // Type 3: 👤 Free Registered Member (1 Free Prediction)
       if (user) {
         return {
           code: 'REGISTERED_FREE',
@@ -436,11 +436,11 @@
           canAccessWishlist: false,
           canAccessChoiceFiller: false,
           unlimited: false,
-          freeLimit: 5
+          freeLimit: 1
         };
       }
 
-      // Type 4: Guest (Requires Login to Claim 5 Free Trial Predictions)
+      // Type 4: Guest (Requires Login to Claim 1 Free Trial Prediction)
       return {
         code: 'UNAUTHENTICATED_GUEST',
         type: 'guest',
@@ -467,11 +467,11 @@
         return {
           allowed: false,
           reason: 'REGISTER_REQUIRED',
-          limit: 5,
+          limit: 1,
           current: 0,
           remaining: 0,
           cat,
-          message: 'Candidate login is required to claim your 5 Free AI Predictions! Sign in or register in seconds to begin.'
+          message: 'Candidate login is required to claim your 1 Free AI Prediction! Sign in or register in seconds to begin.'
         };
       }
 
@@ -479,7 +479,7 @@
         return { allowed: true, remaining: Infinity, limit: Infinity, current: currentCount, cat };
       }
 
-      const limit = cat.freeLimit || 5;
+      const limit = cat.freeLimit ?? 1;
       if (currentCount < limit) {
         return { allowed: true, remaining: limit - currentCount, limit, current: currentCount, cat };
       }
@@ -491,7 +491,7 @@
         current: currentCount,
         remaining: 0,
         cat,
-        message: 'You have completed all 5 free trial predictions. Unlock unlimited AI predictions with Basic Pass (₹149) or Season Pass (₹299)!'
+        message: 'You have used your 1 free trial prediction. Unlock unlimited AI predictions with Basic Pass (₹149) or Season Pass (₹299)!'
       };
     },
 

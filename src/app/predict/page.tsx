@@ -90,6 +90,7 @@ function PredictorContent() {
   // Modal & Compare States
   const [activeCollegeModal, setActiveCollegeModal] = useState<PredictionResult | null>(null);
   const [compareList, setCompareList] = useState<PredictionResult[]>([]);
+  const [compareLimitMsg, setCompareLimitMsg] = useState<string>('');
   const [limitModal, setLimitModal] = useState<{ open: boolean; reason: 'REGISTER_REQUIRED' | 'UPGRADE_REQUIRED'; message?: string }>({
     open: false,
     reason: 'REGISTER_REQUIRED'
@@ -396,7 +397,8 @@ function PredictorContent() {
       setCompareList(compareList.filter(c => c.key !== college.key));
     } else {
       if (compareList.length >= 3) {
-        alert('You can compare a maximum of 3 colleges simultaneously.');
+        setCompareLimitMsg('You can compare a maximum of 3 colleges at a time.');
+        setTimeout(() => setCompareLimitMsg(''), 3000);
         return;
       }
       setCompareList([...compareList, college]);
@@ -438,7 +440,7 @@ function PredictorContent() {
   // Quota description pill
   const quotaRemaining = tierCategory.unlimited
     ? 'Unlimited'
-    : Math.max(0, (tierCategory.freeLimit || 3) - profile.predictionsCount);
+    : Math.max(0, (tierCategory.freeLimit ?? 1) - profile.predictionsCount);
 
   return (
     <div className="w-full relative">
@@ -559,7 +561,7 @@ function PredictorContent() {
                     ? '👑 Counselling Pass Active (Unlimited Access)'
                     : user
                     ? 'Candidate Account Active'
-                    : '🎁 Claim 5 Free Trial Predictions'}
+                    : '🎁 Claim 1 Free Trial Prediction'}
                 </span>
                 <span className="rounded-full bg-teal-500/20 text-teal-800 dark:text-teal-300 font-mono font-black text-[10px] px-2 py-[2px] border border-teal-500/40">
                   {tierCategory.unlimited ? 'UNLIMITED' : user ? `${quotaRemaining} RUNS LEFT` : 'LOGIN REQUIRED'}
@@ -570,7 +572,7 @@ function PredictorContent() {
                   ? 'All 750+ medical college predictions, choice filling tools, and round-by-round cutoffs unlocked.'
                   : user
                   ? `You have ${quotaRemaining} free AI simulations remaining on your candidate profile.`
-                  : 'Candidate login is required to claim your 5 Free AI Predictions across all 750+ medical colleges.'}
+                  : 'Candidate login is required to Claim Your 1 Free AI Prediction across all 750+ medical colleges.'}
               </p>
             </div>
           </div>
@@ -1223,6 +1225,13 @@ function PredictorContent() {
         onClear={() => setCompareList([])}
       />
 
+      {/* Compare limit toast */}
+      {compareLimitMsg && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[90] px-5 py-3 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg border border-white/15 animate-fade-in">
+          {compareLimitMsg}
+        </div>
+      )}
+
       {/* Paywall Prediction Limit Modal */}
       {limitModal.open && (
         <PredictionLimitModal
@@ -1244,11 +1253,11 @@ function PredictorContent() {
         />
       )}
 
-      {/* Auth Modal for Claiming 5 Free Trial Predictions */}
+      {/* Auth Modal for Claiming 1 Free Trial Prediction */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        title="Claim Your 5 Free AI Predictions"
+        title="Claim Your 1 Free AI Prediction"
         subtitle="Sign in or create a free candidate account to unlock instant cutoff forecasts across all 750+ medical colleges."
         onSuccess={() => {
           setAuthModalOpen(false);

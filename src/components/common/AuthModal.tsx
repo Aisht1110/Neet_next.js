@@ -33,7 +33,7 @@ interface AuthModalProps {
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
-  title = 'Claim Your 5 Free AI Predictions',
+  title = 'Claim Your 1 Free AI Prediction',
   subtitle = 'Login or create a free candidate account to unlock instant cutoff forecasts across all 750+ medical colleges.',
   onSuccess,
   defaultMode = 'signup',
@@ -184,7 +184,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   : 'text-slate-600 dark:text-white/50 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Register (Claim 5 Free)
+              Register (Claim 1 Free)
             </button>
             <button
               type="button"
@@ -344,12 +344,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <span>Processing…</span>
                 </>
               ) : (
-                <span>{authMode === 'signup' ? 'Claim 5 Free Predictions →' : 'Sign In to Account →'}</span>
+                <span>{authMode === 'signup' ? 'Claim 1 Free Prediction →' : 'Sign In to Account →'}</span>
               )}
             </motion.button>
           </form>
 
-          {/* Quick Demo Test Access Buttons */}
+          {/* Quick Demo Test Access Buttons (dev only — enforced in auth layer) */}
+          {process.env.NODE_ENV !== 'production' && (
           <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 space-y-1.5 text-center">
             <div className="grid grid-cols-3 gap-2">
               <motion.button
@@ -360,7 +361,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 disabled={isSubmitting}
                 className="py-1.5 px-1 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white text-[11px] font-bold transition-all cursor-pointer text-center"
               >
-                Test Free (5)
+                Test Free (1)
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -389,6 +390,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               1-Click instant test login for evaluation &amp; trial verification.
             </p>
           </div>
+          )}
         </div>
       </motion.div>
     </motion.div>

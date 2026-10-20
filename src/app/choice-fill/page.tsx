@@ -81,7 +81,7 @@ export default function ChoiceFillPage() {
           Sign In to Access Choice Filling Sequencer
         </h1>
         <p className="text-xs sm:text-sm text-slate-600 dark:text-white/70 max-w-md mx-auto mb-6 leading-relaxed">
-          Candidate login is necessary to sequence your MCC preference list, eliminate seat forfeiture mistakes, sync to Firebase, and claim your <strong className="text-teal-600 dark:text-teal-400">5 Free AI Predictions</strong>.
+          Candidate login is necessary to sequence your MCC preference list, eliminate seat forfeiture mistakes, sync to Firebase, and claim your <strong className="text-teal-600 dark:text-teal-400">1 Free AI Prediction</strong>.
         </p>
 
         {/* Auth Action Card */}
@@ -95,7 +95,7 @@ export default function ChoiceFillPage() {
           <div className="space-y-2.5 mb-5 text-xs text-slate-700 dark:text-white/80">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-              <span>Claim 5 Free AI Predictions instantly upon logging in</span>
+              <span>claim your 1 Free AI Prediction instantly upon logging in</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -149,7 +149,7 @@ export default function ChoiceFillPage() {
               onClick={() => signInAsDemoCandidate('free')}
               className="flex-1 py-1.5 text-[11px] font-bold rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white transition-all cursor-pointer text-center"
             >
-              Test Free (5)
+              Test Free (1)
             </button>
             <button
               type="button"
@@ -174,7 +174,7 @@ export default function ChoiceFillPage() {
           isOpen={authModalOpen}
           onClose={() => setAuthModalOpen(false)}
           title="Sign In to Access Choice Filling"
-          subtitle="Login or create a candidate account to build your choice filling order and claim 5 Free AI Predictions."
+          subtitle="Login or create a candidate account to build your choice filling order and claim your 1 Free AI Prediction."
         />
       </div>
     );
