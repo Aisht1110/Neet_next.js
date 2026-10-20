@@ -73,8 +73,7 @@ function nativeEsmImport(url: string) {
   }
 }
 
-export async function getFirebaseSDK() {
-  if (typeof window === 'undefined') return null;
+export async function getFirebaseSDK() {  if (typeof window === 'undefined') return null;
 
   // 1. Direct connection to window.Auth loaded via /js/firebase-config.js (from HTML version)
   const winAuth = (window as any).Auth;
@@ -151,4 +150,35 @@ export async function getFirebaseSDK() {
     console.warn('Firebase SDK dynamic loader fallback:', err);
     return null;
   }
+}
+
+/**
+ * Returns the current user's Firebase ID token (JWT), or null if not signed in.
+ * Used to cryptographically bind payment requests to the logged-in user so the
+ * payment Worker can verify the caller owns the uid it is asked to upgrade.
+ */
+export async function getFirebaseIdToken(forceRefresh = false): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  // 1. Prefer the shared window.Auth client if it exposes the modular auth.
+  const winAuth: any = (window as any).Auth;
+  try {
+    if (winAuth?.auth && winAuth?.authModule?.getIdToken && winAuth.auth.currentUser) {
+      return await winAuth.authModule.getIdToken(winAuth.auth.currentUser, forceRefresh);
+    }
+  } catch (e) {
+    console.warn('getIdToken via window.Auth failed:', e);
+  }
+
+  // 2. Fall back to the dynamically loaded SDK.
+  try {
+    const sdk = await getFirebaseSDK();
+    if (sdk?.auth && sdk?.authMod?.getIdToken && sdk.auth.currentUser) {
+      return await sdk.authMod.getIdToken(sdk.auth.currentUser, forceRefresh);
+    }
+  } catch (e) {
+    console.warn('getIdToken via SDK failed:', e);
+  }
+
+  return null;
 }

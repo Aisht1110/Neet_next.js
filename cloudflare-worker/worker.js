@@ -191,14 +191,18 @@ async function handleCreateOrder(request, env) {
   const plan = PLANS[planKey];
   if (!plan) return errorResponse(`Invalid planKey: '${planKey}'. Expected 'basic', 'season', or 'upgrade'`, 400, request);
 
-  // Optional Firebase Auth Token Verification
+  // Require a valid Firebase ID token and ensure it matches the claimed userId.
+  // This cryptographically binds the request to the signed-in user.
   const authHeader = request.headers.get('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const idToken = authHeader.slice(7);
-    const verifiedUid = await verifyFirebaseToken(idToken, env);
-    if (!verifiedUid || verifiedUid !== userId) {
-      return errorResponse('Token verification failed or UID mismatch', 401, request);
-    }
+  if (!authHeader?.startsWith('Bearer ')) {
+    return errorResponse('Authentication required.', 401, request);
+  }
+  const verifiedUid = await verifyFirebaseToken(authHeader.slice(7), env);
+  if (!verifiedUid) {
+    return errorResponse('Invalid or expired authentication token.', 401, request);
+  }
+  if (verifiedUid !== userId) {
+    return errorResponse('Token does not match the requested user.', 403, request);
   }
 
   // Calculate pricing with coupon discount
@@ -338,6 +342,20 @@ async function handleVerifyPayment(request, env) {
 
   if (!razorpayPaymentId || !userId) {
     return errorResponse('Missing razorpayPaymentId or userId', 400, request);
+  }
+
+  // Require a valid Firebase ID token that matches the claimed userId. This
+  // ensures a payment can only be redeemed into its owner's account.
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return errorResponse('Authentication required.', 401, request);
+  }
+  const verifiedUid = await verifyFirebaseToken(authHeader.slice(7), env);
+  if (!verifiedUid) {
+    return errorResponse('Invalid or expired authentication token.', 401, request);
+  }
+  if (verifiedUid !== userId) {
+    return errorResponse('Token does not match the requested user.', 403, request);
   }
 
   const rzpKeyId = env.RAZORPAY_KEY_ID || '';
@@ -787,21 +805,85 @@ async function getFirebaseAccessToken(env) {
   return access_token;
 }
 
+// ─── Firebase ID Token Verification (cryptographic, RS256) ───
+let cachedGoogleCerts = null;
+let googleCertsExpiry = 0;
+
+async function getGooglePublicCerts() {
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedGoogleCerts && now < googleCertsExpiry - 60) {
+    return cachedGoogleCerts;
+  }
+  const res = await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com');
+  if (!res.ok) throw new Error('Failed to fetch Google public certs');
+  const certs = await res.json();
+
+  // Cache-Control max-age usually ~1 hour; fall back to 1 hour.
+  let maxAge = 3600;
+  const cc = res.headers.get('cache-control') || '';
+  const m = cc.match(/max-age=(\d+)/);
+  if (m) maxAge = parseInt(m[1], 10);
+  cachedGoogleCerts = certs;
+  googleCertsExpiry = now + maxAge;
+  return certs;
+}
+
+function pemToArrayBuffer(pem) {
+  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function base64urlToBytes(str) {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const binary = atob(b64 + pad);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 async function verifyFirebaseToken(idToken, env) {
   try {
     const parts = idToken.split('.');
     if (parts.length !== 3) return null;
 
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const [encodedHeader, encodedPayload, encodedSignature] = parts;
+    const header = JSON.parse(new TextDecoder().decode(base64urlToBytes(encodedHeader)));
+    const payload = JSON.parse(new TextDecoder().decode(base64urlToBytes(encodedPayload)));
+
+    if (header.alg !== 'RS256' || !header.kid) return null;
+
+    // Fetch Google's signing cert for this kid and verify the signature.
+    const certs = await getGooglePublicCerts();
+    const pem = certs[header.kid];
+    if (!pem) return null;
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'spki',
+      pemToArrayBuffer(pem),
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+
+    const signature = base64urlToBytes(encodedSignature);
+    const signedData = new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`);
+    const isValid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, signature, signedData);
+    if (!isValid) return null;
+
+    // Claim validation.
     const now = Date.now() / 1000;
+    if (!payload.exp || payload.exp < now) return null;
+    if (payload.iss !== `https://securetoken.google.com/${env.FIREBASE_PROJECT_ID}`) return null;
+    if (payload.aud !== env.FIREBASE_PROJECT_ID) return null;
+    if (!payload.sub) return null;
 
-    if (payload.exp && payload.exp < now) return null;
-    if (payload.aud !== env.FIREBASE_PROJECT_ID && payload.iss !== `https://securetoken.google.com/${env.FIREBASE_PROJECT_ID}`) {
-      return null;
-    }
-
-    return payload.sub || payload.user_id;
+    return payload.sub;
   } catch (e) {
+    console.warn('Firebase ID token verification error:', e.message);
     return null;
   }
 }

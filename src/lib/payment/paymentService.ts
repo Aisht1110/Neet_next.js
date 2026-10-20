@@ -1,5 +1,7 @@
 'use client';
 
+import { getFirebaseIdToken } from '@/lib/firebase/firebase';
+
 export interface PlanDetails {
   key: 'basic' | 'season' | 'upgrade';
   name: string;
@@ -46,6 +48,21 @@ export const PLANS: Record<string, PlanDetails> = {
 
 const WORKER_BASE_URL = process.env.NEXT_PUBLIC_PAYMENT_WORKER_URL || 'https://neet-payment-worker.upmatripathi500.workers.dev';
 const FALLBACK_RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || '';
+
+/**
+ * Builds JSON request headers for the payment Worker, attaching the Firebase ID
+ * token so the Worker can verify the caller owns the uid being upgraded.
+ */
+async function workerHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const token = await getFirebaseIdToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  } catch {
+    // Proceed without a token; the Worker will reject if it requires one.
+  }
+  return headers;
+}
 
 interface RazorpaySuccessResponse {
   razorpay_payment_id: string;
@@ -178,7 +195,7 @@ export async function initiateCheckout({
     try {
       const res = await fetch(`${WORKER_BASE_URL}/api/create-order`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await workerHeaders(),
         body: JSON.stringify({
           planKey,
           userId: user.uid,
@@ -227,7 +244,7 @@ export async function initiateCheckout({
           // writes the entitlement; the client only mirrors the verified result.
           const verifyRes = await fetch(`${WORKER_BASE_URL}/api/verify-payment`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await workerHeaders(),
             body: JSON.stringify({
               razorpayPaymentId: response.razorpay_payment_id,
               razorpayOrderId: response.razorpay_order_id,
