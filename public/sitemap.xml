@@ -1,48 +1,54 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
-        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
-  <url>
-    <loc>https://neet.counsellor4u.in/</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://neet.counsellor4u.in/predict</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-  </url>
-  <url>
-    <loc>https://neet.counsellor4u.in/colleges</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.90</priority>
-  </url>
-  <url>
-    <loc>https://neet.counsellor4u.in/choice-fill</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-  </url>
-  <url>
-    <loc>https://neet.counsellor4u.in/wishlist</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.80</priority>
-  </url>
-  <url>
-    <loc>https://neet.counsellor4u.in/account</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.80</priority>
-  </url>
-  <url>
-    <loc>https://neet.counsellor4u.in/support</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.75</priority>
-  </url>
+<?xml version="1.0" encoding="UTF-8"?> 
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"> 
+<url>
+  <loc>http://counsellor4u.in/</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/predict</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/colleges</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/choice-fill</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/wishlist</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/support</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/account</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/predict?claim=free</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/predict?rank=12500&amp;cat=Open&amp;claimed=true</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/support#refund</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/support#privacy</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/support#terms</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/cdn-cgi/l/email-protection#accdc8cbc1c9ecc2c5cf82c5c2</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/cdn-cgi/l/email-protection#0b6a6f6c666e4b656268256265</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/cdn-cgi/l/email-protection#573633303a3217393e34793e39</loc>
+</url>
+<url>
+  <loc>http://counsellor4u.in/cdn-cgi/l/email-protection#4b2a2f2c262e0b252228652225</loc>
+</url>
+<url>
+  <loc></loc>
+</url>
 </urlset>
