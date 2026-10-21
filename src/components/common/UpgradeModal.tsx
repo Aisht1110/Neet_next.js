@@ -13,12 +13,11 @@ import {
   ListOrdered, 
   ShieldCheck, 
   ArrowRight, 
-  Tag, 
   Loader2,
   Lock
 } from 'lucide-react';
 import { useAuth } from '@/lib/firebase/AuthContext';
-import { initiateCheckout, validateCoupon, PLANS } from '@/lib/payment/paymentService';
+import { initiateCheckout, PLANS } from '@/lib/payment/paymentService';
 import { BrandIcon } from './BrandIcon';
 
 interface UpgradeModalProps {
@@ -35,10 +34,6 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   const [mounted, setMounted] = useState(false);
   const { user, profile, tierCategory, activateVerifiedTier } = useAuth();
   const isProPlus = tierCategory.type === 'pro_plus' || profile?.tierType === 'pro_plus';
-  const [couponCode, setCouponCode] = useState(isProPlus ? '' : 'NEETPRO');
-  const [couponStatus, setCouponStatus] = useState('');
-  // No discount is applied until the Worker validates a real coupon.
-  const [discount, setDiscount] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
@@ -62,28 +57,12 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
   if (!mounted) return null;
 
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) {
-      setCouponStatus('Enter a coupon code');
-      setDiscount(0);
-      return;
-    }
-    const res = await validateCoupon(couponCode, isProPlus ? 'season' : 'season');
-    if (res.valid && res.discountRupees) {
-      setDiscount(res.discountRupees);
-      setCouponStatus(`✓ ₹${res.discountRupees} off applied!`);
-    } else {
-      setDiscount(0);
-      setCouponStatus(res.message || 'Invalid coupon');
-    }
-  };
-
   const handleUpgradeNow = async () => {
     setIsProcessing(true);
     try {
       await initiateCheckout({
         planKey: isProPlus ? 'upgrade' : 'season',
-        couponCode: couponCode.trim(),
+        couponCode: '',
         user: user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null,
         onSuccess: async ({ paymentId, tier }) => {
           await activateVerifiedTier(tier, paymentId);
@@ -105,7 +84,6 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   };
 
   const basePrice = isProPlus ? PLANS.upgrade.price : PLANS.season.price; // 150 vs 299
-  const finalPrice = Math.max(1, basePrice - discount);
 
   const getFeatureHeadline = () => {
     if (isProPlus) {
@@ -225,30 +203,6 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
           </div>
         </div>
 
-        {/* Coupon Strip */}
-        <div className="mt-4 flex items-center gap-2 p-2 rounded-xl bg-slate-100 dark:bg-white/[0.02] border border-slate-200 dark:border-white/8">
-          <Tag className="h-4 w-4 text-teal-600 dark:text-teal-400 shrink-0 ml-1" />
-          <input 
-            type="text"
-            value={couponCode}
-            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-            placeholder="Coupon Code"
-            className="flex-1 bg-transparent border-0 text-xs font-bold mono-font text-slate-900 dark:text-white focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={handleApplyCoupon}
-            className="px-2.5 py-1 rounded-lg bg-teal-600 dark:bg-teal-400 text-white dark:text-slate-950 font-bold text-[11px] cursor-pointer hover:brightness-110 transition-all"
-          >
-            Apply
-          </button>
-        </div>
-        {couponStatus && (
-          <p className={`text-[11px] font-semibold mt-1 px-1 ${discount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-            {couponStatus}
-          </p>
-        )}
-
         {/* Price & Checkout CTA */}
         <div className="mt-5 pt-4 border-t border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-center sm:text-left">
@@ -257,14 +211,11 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl sm:text-3xl font-black text-amber-700 dark:text-amber-300 mono-font">
-                ₹{finalPrice}
+                ₹{basePrice}
               </span>
               <span className="text-xs text-slate-400 dark:text-white/40 line-through">
                 {isProPlus ? '₹299' : '₹599'}
               </span>
-              {discount > 0 && (
-                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">Save ₹{discount}!</span>
-              )}
             </div>
           </div>
 
@@ -284,7 +235,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             ) : (
               <>
                 <Crown className="h-4 w-4" />
-                <span>{isProPlus ? `Pay ₹${finalPrice} & Upgrade to VIP` : `Unlock Season Pass (₹${finalPrice})`}</span>
+                <span>{isProPlus ? `Pay ₹${basePrice} & Upgrade to VIP` : `Unlock Season Pass (₹${basePrice})`}</span>
               </>
             )}
           </motion.button>

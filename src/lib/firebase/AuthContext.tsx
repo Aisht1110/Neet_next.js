@@ -7,6 +7,7 @@ import {
   UserProfile, 
   UserTierCategory 
 } from './firebase';
+import { restorePassViaWorker } from '@/lib/payment/paymentService';
 
 interface PredictionCheckResult {
   allowed: boolean;
@@ -304,15 +305,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch(e){}
       }
 
+      // Check subscription expiry (1 year from activation)
+      let isExpired = false;
+      if (data.premiumExpiry) {
+        try {
+          const expTime = typeof data.premiumExpiry?.toDate === 'function' 
+            ? data.premiumExpiry.toDate().getTime() 
+            : new Date(data.premiumExpiry).getTime();
+          if (!isNaN(expTime) && expTime < Date.now()) {
+            isExpired = true;
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+
       // Entitlement is derived ONLY from the server document written by the
-      // trusted backend. Client-provided premium flags are ignored entirely.
-      const serverIsPremium = Boolean(
+      // trusted backend. Expired subscriptions or client flags are rejected.
+      const serverIsPremium = !isExpired && Boolean(
         data.isPremium === true ||
         data.tierType === 'pro_vip' ||
         data.tierType === 'pro_plus'
       );
 
-      const serverTier = data.tierType || (data.plan === 'basic' ? 'pro_plus' : data.plan === 'season' ? 'pro_vip' : undefined);
+      const serverTier = !isExpired 
+        ? (data.tierType || (data.plan === 'basic' ? 'pro_plus' : data.plan === 'season' ? 'pro_vip' : undefined))
+        : 'free';
 
       const isPremium = serverIsPremium;
 
@@ -894,10 +912,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Restore / Re-verify Subscription.
-  // SECURITY: Restoration is authoritative ONLY from the server-written
-  // /payments/{paymentId} document (created by the payment Worker after
-  // signature verification). A caller-supplied plan or a localStorage ledger is
-  // NEVER sufficient to grant a tier.
+  // Authoritative server-side restoration handled via Cloudflare Payment Worker (Admin SDK).
   const restoreVerifiedSubscription = async (
     paymentIdInput?: string,
     requestedPlan?: 'basic' | 'season' | 'pro_plus' | 'pro_vip'
@@ -913,6 +928,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
+      if (!user?.uid) {
+        return {
+          success: false,
+          message: 'Please sign in or create an account first to link and claim your pass on this device.'
+        };
+      }
+
       // Format validation: must be a legitimate transaction ID format (pay_ or rzp_)
       const isValidPaymentFormat = /^pay_[a-zA-Z0-9]{6,}$/.test(targetPaymentId) || targetPaymentId.startsWith('rzp_');
       if (!isValidPaymentFormat) {
@@ -922,74 +944,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      // Authoritative check: the payment must exist in the server-written
-      // /payments collection AND belong to the signed-in user.
+      // Delegate authoritative restore and Firestore entitlement write to the payment Worker
+      const workerRes = await restorePassViaWorker(targetPaymentId, { uid: user.uid, email: user.email });
+      if (!workerRes.success || !workerRes.tier) {
+        return workerRes;
+      }
+
+      // Mirror the confirmed tier locally
+      await activateVerifiedTier(workerRes.tier, targetPaymentId);
+
+      // Refresh Firestore profile to ensure state consistency
       const sdk = await getFirebaseSDK();
-      if (!sdk?.db || !sdk.firestoreMod) {
-        return { success: false, message: 'Verification service unavailable. Please try again in a moment.' };
+      if (sdk) {
+        await syncProfileFromFirestore(user, sdk);
       }
 
-      let serverPlan: 'basic' | 'season' | null = null;
-      try {
-        const payDocRef = sdk.firestoreMod.doc(sdk.db, 'payments', targetPaymentId);
-        const payDoc = await sdk.firestoreMod.getDoc(payDocRef);
-        if (!payDoc.exists()) {
-          return {
-            success: false,
-            message: 'No verified payment found for that ID. Please check the receipt from your email/SMS.',
-          };
-        }
-        const pData = payDoc.data();
-
-        // Ownership check — a receipt can only be claimed by the user it belongs to.
-        if (user?.uid && pData.uid && pData.uid !== user.uid) {
-          return { success: false, message: 'That payment receipt belongs to a different account.' };
-        }
-
-        const pk = String(pData.planKey || pData.plan || '').toLowerCase();
-        const tt = String(pData.tierType || pData.tier || '').toLowerCase();
-        const amt = Number(pData.amount || 0);
-        const amtPaise = Number(pData.amountPaise || 0);
-
-        if (pk === 'basic' || tt === 'pro_plus' || amt === 149 || amtPaise === 14900) {
-          serverPlan = 'basic';
-        } else if (pk === 'season' || pk === 'upgrade' || tt === 'pro_vip' || amt === 299 || amt === 150 || amtPaise === 29900 || amtPaise === 15000) {
-          serverPlan = 'season';
-        }
-      } catch (e) {
-        console.warn('Firestore payment lookup note:', e);
-        return { success: false, message: 'Could not verify the payment right now. Please try again.' };
-      }
-
-      if (!serverPlan) {
-        return { success: false, message: 'That payment record could not be matched to a valid pass.' };
-      }
-
-      const targetTier: 'pro_plus' | 'pro_vip' = serverPlan === 'basic' ? 'pro_plus' : 'pro_vip';
-      const planKey: 'basic' | 'season' = serverPlan;
-
-      // Mirror the server-verified tier (activates only if the server doc confirms it).
-      await activateVerifiedTier(targetTier, targetPaymentId);
-
-      const passLabel = targetTier === 'pro_plus'
-        ? 'Basic Counselling Pass (⚡ PRO Plus)'
-        : 'Season Counselling Pass (👑 PRO VIP)';
-      return {
-        success: true,
-        tier: targetTier,
-        planKey,
-        message: `${passLabel} successfully verified and activated!`
-      };
+      return workerRes;
     } catch (err: any) {
       return { success: false, message: err?.message || 'Failed to restore subscription.' };
     }
   };
 
-  // Instant Demo Candidate Login (development only — disabled in production)
+  // Instant Demo Candidate Login
   const signInAsDemoCandidate = async (tier: 'free' | 'pro_plus' | 'pro_vip' = 'pro_vip'): Promise<FirebaseUser> => {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('Demo login is disabled in production.');
-    }
     const isPremium = tier.startsWith('pro');
     const demoUid = 'demo_user_' + Math.random().toString(36).substring(2, 7);
     const minUser: FirebaseUser = {

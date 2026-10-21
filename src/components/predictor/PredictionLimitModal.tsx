@@ -22,7 +22,6 @@ export const PredictionLimitModal: React.FC<PredictionLimitModalProps> = ({
 }) => {
   const [mounted, setMounted] = useState(false);
   const { user, activateVerifiedTier } = useAuth();
-  const [couponCode, setCouponCode] = useState('');
   const isGuest = reason === 'REGISTER_REQUIRED';
 
   useEffect(() => {
@@ -44,7 +43,7 @@ export const PredictionLimitModal: React.FC<PredictionLimitModalProps> = ({
 
     await initiateCheckout({
       planKey,
-      couponCode,
+      couponCode: '',
       user,
       onSuccess: async ({ paymentId, tier }) => {
         await activateVerifiedTier(tier, paymentId);

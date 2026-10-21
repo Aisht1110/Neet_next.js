@@ -26,7 +26,7 @@ import {
 import { scoreToRank } from '@/lib/engine/scoreToRank';
 import { BrandIcon } from '@/components/common/BrandIcon';
 import { useAuth } from '@/lib/firebase/AuthContext';
-import { initiateCheckout, validateCoupon } from '@/lib/payment/paymentService';
+import { initiateCheckout } from '@/lib/payment/paymentService';
 import { PaymentCelebrationModal } from '@/components/payment/PaymentCelebrationModal';
 import { ProCandidateDashboard } from '@/components/dashboard/ProCandidateDashboard';
 import { STATS } from '@/lib/constants';
@@ -39,11 +39,6 @@ export default function HomePage() {
   const [rankValue, setRankValue] = useState<string>('12500');
   const [scoreValue, setScoreValue] = useState<string>('645');
   const [category, setCategory] = useState<string>('Open');
-  const [couponCode, setCouponCode] = useState<string>('');
-  const [discountApplied, setDiscountApplied] = useState<boolean>(false);
-  const [couponDiscountRupees, setCouponDiscountRupees] = useState<number>(0);
-  const [couponFinalAmount, setCouponFinalAmount] = useState<number | null>(null);
-  const [couponError, setCouponError] = useState<string>('');
   const [checkoutError, setCheckoutError] = useState<string>('');
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
@@ -72,7 +67,7 @@ export default function HomePage() {
     try {
       await initiateCheckout({
         planKey,
-        couponCode: discountApplied ? couponCode : '',
+        couponCode: '',
         user,
         onSuccess: async ({ paymentId, tier }) => {
           await activateVerifiedTier(tier, paymentId);
@@ -165,25 +160,6 @@ export default function HomePage() {
   };
 
   const teaserColleges = getTeaserColleges(currentRank);
-
-  const handleApplyCoupon = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = couponCode.trim().toUpperCase();
-    if (!code) return;
-    // Coupon validity and discount are authoritative on the payment Worker only.
-    const res = await validateCoupon(code, 'season');
-    if (res.valid && res.discountRupees) {
-      setDiscountApplied(true);
-      setCouponDiscountRupees(res.discountRupees);
-      setCouponFinalAmount(res.finalAmountRupees ?? null);
-      setCouponError('');
-    } else {
-      setDiscountApplied(false);
-      setCouponDiscountRupees(0);
-      setCouponFinalAmount(null);
-      setCouponError(res.message || 'Invalid or expired coupon code.');
-    }
-  };
 
   const features = [
     { icon: '🎯', title: 'Smart Empirical Algorithm', desc: 'Exact match → buffer zone → historical trend analysis across 2024 & 2025 rounds. Zero synthetic guesswork.' },
@@ -792,14 +768,9 @@ export default function HomePage() {
 
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-4xl sm:text-5xl font-black text-amber-300 font-mono">
-                    ₹{couponFinalAmount ?? 299}
+                    ₹299
                   </span>
                   <span className="text-sm text-white/40 line-through font-mono">₹599</span>
-                  {discountApplied && couponDiscountRupees > 0 && (
-                    <span className="text-xs font-bold text-amber-400 ml-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
-                      ₹{couponDiscountRupees} Coupon Applied
-                    </span>
-                  )}
                 </div>
 
                 <div className="w-full h-px bg-white/10 my-6" />
@@ -845,30 +816,6 @@ export default function HomePage() {
               </div>
 
               <div className="mt-8 pt-4">
-                {/* Coupon Code Box */}
-                {!discountApplied && (
-                  <>
-                    <form onSubmit={handleApplyCoupon} className="flex gap-2 mb-1.5">
-                      <input
-                        type="text"
-                        value={couponCode}
-                        onChange={(e) => { setCouponCode(e.target.value); setCouponError(''); }}
-                        placeholder="PROMO CODE (e.g. NEET50)"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold placeholder:text-white/40 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
-                      />
-                      <button
-                        type="submit"
-                        className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 transition-all cursor-pointer shadow-sm"
-                      >
-                        Apply
-                      </button>
-                    </form>
-                    {couponError && (
-                      <p className="text-[11px] text-rose-300 font-semibold mb-2.5">{couponError}</p>
-                    )}
-                  </>
-                )}
-
                 {tierCategory.type === 'pro_vip' ? (
                   <Link
                     href="/predict"
@@ -895,7 +842,7 @@ export default function HomePage() {
                     className="w-full py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 transition-all shadow-xl shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
                   >
                     <Crown className="w-4 h-4 text-slate-950" />
-                    <span>Get Season Pass VIP — ₹{discountApplied ? '249' : '299'}</span>
+                    <span>Get Season Pass VIP — ₹299</span>
                     <ArrowRight className="w-4 h-4 text-slate-950" />
                   </button>
                 )}

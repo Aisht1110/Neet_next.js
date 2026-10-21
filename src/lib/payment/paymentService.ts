@@ -110,6 +110,15 @@ export function loadRazorpaySDK(): Promise<RazorpayConstructor | null> {
       resolve(win.Razorpay);
       return;
     }
+    const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(win.Razorpay || null));
+      existing.addEventListener('error', () => reject(new Error('Failed to load Razorpay Checkout SDK. Please check your internet connection.')));
+      setTimeout(() => {
+        if (win.Razorpay) resolve(win.Razorpay);
+      }, 500);
+      return;
+    }
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;
@@ -117,6 +126,43 @@ export function loadRazorpaySDK(): Promise<RazorpayConstructor | null> {
     script.onerror = () => reject(new Error('Failed to load Razorpay Checkout SDK. Please check your internet connection.'));
     document.head.appendChild(script);
   });
+}
+
+export async function restorePassViaWorker(
+  paymentId: string,
+  user: { uid: string; email?: string | null }
+): Promise<{ success: boolean; message: string; tier?: 'pro_vip' | 'pro_plus'; planKey?: 'basic' | 'season' }> {
+  try {
+    const res = await fetch(`${WORKER_BASE_URL}/api/restore-pass`, {
+      method: 'POST',
+      headers: await workerHeaders(),
+      body: JSON.stringify({
+        paymentId: paymentId.trim(),
+        userId: user.uid,
+        email: user.email || ''
+      })
+    });
+
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.success) {
+      const passName = data.tier === 'pro_plus' ? 'Basic Counselling Pass (⚡ PRO Plus)' : 'Season Counselling Pass (👑 PRO VIP)';
+      return {
+        success: true,
+        message: `${passName} successfully verified and activated!`,
+        tier: data.tier,
+        planKey: data.planKey
+      };
+    }
+    return {
+      success: false,
+      message: data?.message || 'Could not restore pass. Please check your Payment ID from your email or SMS.'
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Could not reach restore server. Please check your internet connection.'
+    };
+  }
 }
 
 export interface CouponResult {

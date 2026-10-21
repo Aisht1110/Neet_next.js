@@ -29,7 +29,7 @@ import {
 import { BrandIcon } from '@/components/common/BrandIcon';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { useUserData } from '@/lib/store/useUserData';
-import { initiateCheckout, validateCoupon } from '@/lib/payment/paymentService';
+import { initiateCheckout } from '@/lib/payment/paymentService';
 import { PaymentCelebrationModal } from '@/components/payment/PaymentCelebrationModal';
 
 function AccountContent() {
@@ -96,10 +96,8 @@ function AccountContent() {
   const [domicileState, setDomicileState] = useState(profile.state || 'Delhi (NCT)');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Coupon & Pass checkout state
-  const [couponCode, setCouponCode] = useState('NEETPRO');
+  // Pass checkout state
   const [couponStatus, setCouponStatus] = useState<string>('');
-  const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [celebration, setCelebration] = useState<{ open: boolean; planKey: string; paymentId: string }>({
     open: false,
     planKey: 'basic',
@@ -288,18 +286,6 @@ function AccountContent() {
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  // Handle Coupon Apply
-  const handleApplyCoupon = async (planKey: 'basic' | 'season') => {
-    const res = await validateCoupon(couponCode, planKey);
-    if (res.valid && res.discountRupees) {
-      setCouponDiscount(res.discountRupees);
-      setCouponStatus(`✓ ₹${res.discountRupees} Discount applied with code ${res.code}`);
-    } else {
-      setCouponDiscount(0);
-      setCouponStatus(res.message || 'Invalid coupon code');
-    }
-  };
-
   // Handle Pass Purchase
   const handleBuyPass = async (planKey: 'basic' | 'season' | 'upgrade') => {
     if (!user) {
@@ -307,9 +293,10 @@ function AccountContent() {
       return;
     }
 
+    setCouponStatus('');
     await initiateCheckout({
       planKey,
-      couponCode: couponDiscount > 0 ? couponCode : '',
+      couponCode: '',
       user,
       onSuccess: async ({ paymentId, tier }) => {
         await activateVerifiedTier(tier, paymentId);
@@ -576,7 +563,7 @@ function AccountContent() {
                     disabled={isSubmitting}
                     className="py-2 px-1 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white/80 font-bold text-[11px] text-center transition-all cursor-pointer shadow-sm active:scale-95"
                   >
-                    <span>Test Free (5)</span>
+                    <span>Test Free (1 Run)</span>
                   </button>
 
                   <button
@@ -618,7 +605,7 @@ function AccountContent() {
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-white/40">
-                  1-Click instant testing: Free (5 quota), Basic Pass (₹149 PRO Plus), and Season Pass (₹299 PRO VIP).
+                  1-Click instant testing: Free Member (1 trial run), Basic Pass (₹149 PRO Plus), and Season Pass (₹299 PRO VIP).
                 </p>
               </div>
             </div>
@@ -914,34 +901,11 @@ function AccountContent() {
                   </p>
                 </div>
 
-                {/* Coupon Input Strip */}
-                <div className="glass-panel p-4 flex flex-col sm:flex-row items-center gap-3">
-                  <div className="flex items-center gap-2 w-full sm:w-auto text-xs font-bold text-slate-800 dark:text-white/80">
-                    <Tag className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                    <span>Have a Coupon?</span>
+                {couponStatus && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-semibold text-center">
+                    {couponStatus}
                   </div>
-                  <div className="flex-1 flex gap-2 w-full">
-                    <input
-                      type="text"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      placeholder="e.g. NEETPRO"
-                      className="input-field text-xs py-2 mono-font"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleApplyCoupon('season')}
-                      className="px-4 py-2 rounded-xl bg-teal-600 dark:bg-teal-400 text-white dark:text-slate-950 font-black text-xs hover:brightness-110 transition-all cursor-pointer shrink-0"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                  {couponStatus && (
-                    <span className={`text-xs font-bold ${couponDiscount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                      {couponStatus}
-                    </span>
-                  )}
-                </div>
+                )}
 
                 {/* Plan Comparison Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -957,7 +921,7 @@ function AccountContent() {
                       <h4 className="text-lg font-black text-slate-950 dark:text-white font-heading mb-1">Basic Counselling Pass</h4>
                       <div className="flex items-baseline gap-2 mb-4">
                         <span className="text-2xl font-black text-slate-950 dark:text-white mono-font">
-                          ₹{Math.max(1, 149 - couponDiscount)}
+                          ₹149
                         </span>
                         <span className="text-xs text-slate-400 dark:text-white/40 line-through">₹299</span>
                       </div>
@@ -1024,7 +988,7 @@ function AccountContent() {
                       <h4 className="text-lg font-black text-slate-950 dark:text-white font-heading mb-1">Season Counselling Pass</h4>
                       <div className="flex items-baseline gap-2 mb-4">
                         <span className="text-2xl font-black text-amber-700 dark:text-amber-300 mono-font">
-                          ₹{profile.tierType === 'pro_plus' ? Math.max(1, 150 - couponDiscount) : Math.max(1, 299 - couponDiscount)}
+                          ₹{profile.tierType === 'pro_plus' ? 150 : 299}
                         </span>
                         <span className="text-xs text-slate-400 dark:text-white/40 line-through">
                           {profile.tierType === 'pro_plus' ? '₹299' : '₹599'}
@@ -1498,7 +1462,7 @@ function AccountContent() {
                     >
                       <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between">
                         <span>Free Candidate</span>
-                        <span className="text-[10px] text-slate-500 font-mono">5 Runs</span>
+                        <span className="text-[10px] text-slate-500 font-mono">1 Run</span>
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-white/50">
                         1 free prediction; Wishlist &amp; Choice Sequencer locked.
