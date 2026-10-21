@@ -298,6 +298,22 @@ export async function initiateCheckout({
       },
       handler: async function (response: RazorpaySuccessResponse) {
         try {
+          // Save payment ID to localStorage immediately before network verification
+          // so the user can use "Restore Pass" if the connection drops mid-verification.
+          if (typeof window !== 'undefined') {
+            try {
+              const existingHistory = JSON.parse(localStorage.getItem('neet_payment_history') || '[]');
+              existingHistory.unshift({
+                paymentId: response.razorpay_payment_id,
+                orderId: response.razorpay_order_id,
+                planKey,
+                timestamp: new Date().toISOString(),
+              });
+              localStorage.setItem('neet_payment_history', JSON.stringify(existingHistory.slice(0, 10)));
+              localStorage.setItem('neet_last_payment_id', response.razorpay_payment_id);
+            } catch (_) { /* localStorage may be blocked in private mode */ }
+          }
+
           // Verify server-side. The Worker checks the Razorpay signature and
           // writes the entitlement; the client only mirrors the verified result.
           const verifyRes = await fetch(`${WORKER_BASE_URL}/api/verify-payment`, {
@@ -312,19 +328,28 @@ export async function initiateCheckout({
             }),
           });
 
+          // Read body first so we can surface the server's error message
+          let verifyData: { verified?: boolean; tier?: 'pro_plus' | 'pro_vip'; planKey?: 'basic' | 'season'; message?: string } | null = null;
+          try {
+            verifyData = await verifyRes.json();
+          } catch (_) { /* non-JSON fallback */ }
+
           if (!verifyRes.ok) {
-            throw new Error('Payment verification failed. If money was debited, contact support with your payment ID.');
+            // Surface the server error message if available
+            const serverMsg = verifyData?.message;
+            const payId = response.razorpay_payment_id;
+            throw new Error(
+              serverMsg
+                ? `Payment verification failed: ${serverMsg} (Payment ID: ${payId})`
+                : `Payment verification failed (HTTP ${verifyRes.status}). If money was debited, contact support with Payment ID: ${payId}`
+            );
           }
 
-          const verified = (await verifyRes.json()) as {
-            verified?: boolean;
-            tier?: 'pro_plus' | 'pro_vip';
-            planKey?: 'basic' | 'season';
-          };
-
-          if (!verified?.verified || !verified.tier) {
-            throw new Error('Payment could not be verified. If money was debited, contact support with your payment ID.');
+          if (!verifyData?.verified || !verifyData.tier) {
+            throw new Error(`Pass activation failed — server did not confirm the tier. Contact support with Payment ID: ${response.razorpay_payment_id}`);
           }
+
+          const verified = verifyData as { verified: boolean; tier: 'pro_plus' | 'pro_vip'; planKey?: 'basic' | 'season' };
 
           onSuccess({
             paymentId: response.razorpay_payment_id,
