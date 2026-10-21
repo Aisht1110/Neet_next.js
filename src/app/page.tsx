@@ -44,6 +44,8 @@ export default function HomePage() {
   const [couponDiscountRupees, setCouponDiscountRupees] = useState<number>(0);
   const [couponFinalAmount, setCouponFinalAmount] = useState<number | null>(null);
   const [couponError, setCouponError] = useState<string>('');
+  const [checkoutError, setCheckoutError] = useState<string>('');
+  const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [celebration, setCelebration] = useState<{ open: boolean; planKey: string; paymentId: string }>({
     open: false,
@@ -65,15 +67,23 @@ export default function HomePage() {
       return;
     }
 
-    await initiateCheckout({
-      planKey,
-      couponCode: discountApplied ? couponCode : '',
-      user,
-      onSuccess: async ({ paymentId, tier }) => {
-        await activateVerifiedTier(tier, paymentId);
-        setCelebration({ open: true, planKey, paymentId });
-      },
-    });
+    setCheckoutError('');
+    setCheckoutLoading(true);
+    try {
+      await initiateCheckout({
+        planKey,
+        couponCode: discountApplied ? couponCode : '',
+        user,
+        onSuccess: async ({ paymentId, tier }) => {
+          await activateVerifiedTier(tier, paymentId);
+          setCelebration({ open: true, planKey, paymentId });
+        },
+        onDismiss: () => setCheckoutLoading(false),
+        onError: (err) => setCheckoutError(err.message || 'Could not start checkout. Please try again.'),
+      });
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   const handleUpgradeToSeason = async () => {
@@ -81,15 +91,23 @@ export default function HomePage() {
       router.push('/account?plan=upgrade');
       return;
     }
-    await initiateCheckout({
-      planKey: 'upgrade',
-      couponCode: '',
-      user,
-      onSuccess: async ({ paymentId, tier }) => {
-        await activateVerifiedTier(tier, paymentId);
-        setCelebration({ open: true, planKey: 'upgrade', paymentId });
-      },
-    });
+    setCheckoutError('');
+    setCheckoutLoading(true);
+    try {
+      await initiateCheckout({
+        planKey: 'upgrade',
+        couponCode: '',
+        user,
+        onSuccess: async ({ paymentId, tier }) => {
+          await activateVerifiedTier(tier, paymentId);
+          setCelebration({ open: true, planKey: 'upgrade', paymentId });
+        },
+        onDismiss: () => setCheckoutLoading(false),
+        onError: (err) => setCheckoutError(err.message || 'Could not start checkout. Please try again.'),
+      });
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   const handleQuickPredict = (e: React.FormEvent) => {
@@ -656,6 +674,12 @@ export default function HomePage() {
               Pay once. Use throughout all rounds of NEET UG counselling until final seat confirmation.
             </p>
           </div>
+
+          {checkoutError && (
+            <div className="max-w-4xl mx-auto mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-semibold text-center">
+              {checkoutError}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto items-stretch">
             {/* Card 1: Basic Pass */}

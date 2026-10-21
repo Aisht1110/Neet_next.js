@@ -51,15 +51,20 @@ const FALLBACK_RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY || '';
 
 /**
  * Builds JSON request headers for the payment Worker, attaching the Firebase ID
- * token so the Worker can verify the caller owns the uid being upgraded.
+ * token (best-effort) so the Worker can optionally verify the caller owns the
+ * uid. Never blocks checkout: it times out after 2s and proceeds without a token
+ * if one cannot be obtained quickly.
  */
 async function workerHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   try {
-    const token = await getFirebaseIdToken();
+    const token = await Promise.race([
+      getFirebaseIdToken(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+    ]);
     if (token) headers['Authorization'] = `Bearer ${token}`;
   } catch {
-    // Proceed without a token; the Worker will reject if it requires one.
+    // Proceed without a token.
   }
   return headers;
 }
@@ -192,6 +197,7 @@ export async function initiateCheckout({
 
     // Create order via the payment Worker (authoritative amount is computed there).
     let orderData: OrderDataResponse | null = null;
+    let orderError = '';
     try {
       const res = await fetch(`${WORKER_BASE_URL}/api/create-order`, {
         method: 'POST',
@@ -203,13 +209,19 @@ export async function initiateCheckout({
           couponCode: couponCode || '',
         }),
       });
-      if (res.ok) orderData = (await res.json()) as OrderDataResponse;
+      if (res.ok) {
+        orderData = (await res.json()) as OrderDataResponse;
+      } else {
+        const errBody = await res.json().catch(() => null) as { message?: string } | null;
+        orderError = errBody?.message || `Server error (${res.status})`;
+      }
     } catch (e) {
+      orderError = 'Could not reach the payment server. Please check your connection.';
       console.warn('Worker create-order failed:', e);
     }
 
     if (!orderData?.orderId || !orderData?.keyId) {
-      throw new Error('Unable to start secure checkout. Please try again in a moment.');
+      throw new Error(orderError || 'Unable to start secure checkout. Please try again in a moment.');
     }
 
     const rzpOptions = {

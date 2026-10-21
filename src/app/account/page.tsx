@@ -315,6 +315,7 @@ function AccountContent() {
         await activateVerifiedTier(tier, paymentId);
         setCelebration({ open: true, planKey: planKey === 'upgrade' ? 'season' : planKey, paymentId });
       },
+      onError: (err) => setCouponStatus(`✕ ${err.message || 'Could not start checkout. Please try again.'}`),
     });
   };
 
